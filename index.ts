@@ -1,7 +1,9 @@
 import puppeteer from "puppeteer";
 
 const start = async (): Promise<void> => {
-  const browser = await puppeteer.launch();
+  const browser = await puppeteer.launch({
+    defaultViewport: { width: 1920, height: 1080 },
+  });
   const page = await browser.newPage();
   await page.goto("https://google.com");
 
@@ -16,7 +18,9 @@ const start = async (): Promise<void> => {
   // console.log(content);
   await browser.close();
 
-  const browser2 = await puppeteer.launch();
+  const browser2 = await puppeteer.launch({
+    defaultViewport: { width: 1920, height: 1080 },
+  });
   const page2 = await browser2.newPage();
   // Reload content
   await page2.setContent(content);
