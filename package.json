@@ -1,0 +1,12 @@
+{
+  "private": true,
+  "sideEffects": false,
+  "scripts": {},
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.0.4"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
