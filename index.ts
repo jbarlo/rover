@@ -5,8 +5,15 @@ const start = async (): Promise<void> => {
   const page = await browser.newPage();
   await page.goto("https://google.com");
 
-  const snip = await page.screenshot({ encoding: "base64" });
-  console.log(snip.toString());
+  // const snip = await page.screenshot({ encoding: "base64" });
+  await page.evaluate(() => {
+    const el = document.querySelectorAll("script");
+    for (let i = 0; i < el.length; i++) {
+      el[i].parentNode?.removeChild(el[i]);
+    }
+  });
+  const content = await page.content();
+  console.log(content);
 
   await browser.close();
 };
