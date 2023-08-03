@@ -5,7 +5,7 @@ const start = async (): Promise<void> => {
   const page = await browser.newPage();
   await page.goto("https://google.com");
 
-  // const snip = await page.screenshot({ encoding: "base64" });
+  // Remove scripts
   await page.evaluate(() => {
     const el = document.querySelectorAll("script");
     for (let i = 0; i < el.length; i++) {
@@ -13,9 +13,19 @@ const start = async (): Promise<void> => {
     }
   });
   const content = await page.content();
-  console.log(content);
-
+  // console.log(content);
   await browser.close();
+
+  const browser2 = await puppeteer.launch();
+  const page2 = await browser2.newPage();
+  // Reload content
+  await page2.setContent(content);
+
+  // Get screenshot
+  const snip = await page2.screenshot({ encoding: "base64" });
+  console.log(snip);
+
+  await browser2.close();
 };
 
 start().catch((e) => {
