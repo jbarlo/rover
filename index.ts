@@ -1,4 +1,30 @@
-import puppeteer from "puppeteer";
+import puppeteer, { type KeyInput, type Page } from "puppeteer";
+
+type Step =
+  | { type: "click"; selector: string }
+  | { type: "type"; text: string }
+  | { type: "press"; key: KeyInput }
+  | { type: "waitForNav" };
+
+const steps: Step[] = [
+  { type: "click", selector: "#APjFqb" },
+  { type: "type", text: "tester" },
+  { type: "press", key: "Enter" },
+  { type: "waitForNav" },
+];
+
+const runStep = async (page: Page, thing: Step): Promise<void> => {
+  if (thing.type === "click") {
+    await page.waitForSelector(thing.selector, { visible: true });
+    await page.click(thing.selector);
+  } else if (thing.type === "type") {
+    await page.keyboard.type(thing.text);
+  } else if (thing.type === "press") {
+    await page.keyboard.press(thing.key);
+  } else if (thing.type === "waitForNav") {
+    await page.waitForNavigation({ waitUntil: "domcontentloaded" });
+  }
+};
 
 const start = async (): Promise<void> => {
   const browser = await puppeteer.launch({
@@ -24,16 +50,12 @@ const start = async (): Promise<void> => {
   // const page2 = await browser2.newPage();
   // Reload content
   // await page2.setContent(content);
-  await page.waitForSelector("#APjFqb", { visible: true });
-  const textarea = await page.$("#APjFqb");
-  await textarea?.click();
 
-  await page.keyboard.type("tester");
-
-  await Promise.all([
-    page.waitForNavigation({ waitUntil: "domcontentloaded" }),
-    page.keyboard.press("Enter"),
-  ]);
+  await steps.reduce(
+    (promise: Promise<void>, step: Step) =>
+      promise.then(() => runStep(page, step)),
+    Promise.resolve(),
+  );
 
   // Get screenshot
   const snip = await page.screenshot({ encoding: "base64" });

@@ -11,6 +11,8 @@
     "project": ["./tsconfig.json"]
   },
   "rules": {
-    "prettier/prettier": ["warn"]
+    "prettier/prettier": ["warn"],
+    "@typescript-eslint/no-floating-promises": "off",
+    "@typescript-eslint/promise-function-async": "off"
   }
 }
