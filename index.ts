@@ -6,6 +6,7 @@ type Step =
   | { type: "press"; key: KeyInput }
   | { type: "waitForNav" };
 
+const url: string = "https://google.com";
 const steps: Step[] = [
   { type: "click", selector: "#APjFqb" },
   { type: "type", text: "tester" },
@@ -31,7 +32,7 @@ const start = async (): Promise<void> => {
     defaultViewport: { width: 1920, height: 1080 },
   });
   const page = await browser.newPage();
-  await page.goto("https://google.com", { waitUntil: "domcontentloaded" });
+  await page.goto(url, { waitUntil: "domcontentloaded" });
 
   // Remove scripts
   // await page.evaluate(() => {
@@ -51,15 +52,20 @@ const start = async (): Promise<void> => {
   // Reload content
   // await page2.setContent(content);
 
+  const snips: Array<{ index: number; snip: string }> = [];
+
   await steps.reduce(
-    (promise: Promise<void>, step: Step) =>
-      promise.then(() => runStep(page, step)),
+    (promise: Promise<void>, step: Step, i: number) =>
+      promise.then(async () => {
+        await runStep(page, step);
+        // Get screenshot
+        const snip = await page.screenshot({ encoding: "base64" });
+        snips.push({ index: i, snip });
+      }),
     Promise.resolve(),
   );
 
-  // Get screenshot
-  const snip = await page.screenshot({ encoding: "base64" });
-  console.log(snip);
+  console.log(JSON.stringify(snips));
 
   await browser.close();
 };
