@@ -4,7 +4,8 @@ type Step =
   | { type: "click"; selector: string }
   | { type: "type"; text: string }
   | { type: "press"; key: KeyInput }
-  | { type: "waitForNav" };
+  | { type: "waitForNav" }
+  | { type: "special"; func: (page: Page) => Promise<void> };
 
 const url: string = "https://google.com";
 const steps: Step[] = [
@@ -24,6 +25,8 @@ const runStep = async (page: Page, thing: Step): Promise<void> => {
     await page.keyboard.press(thing.key);
   } else if (thing.type === "waitForNav") {
     await page.waitForNavigation({ waitUntil: "domcontentloaded" });
+  } else if (thing.type === "special") {
+    await thing.func(page);
   }
 };
 
@@ -62,7 +65,11 @@ const start = async (): Promise<void> => {
         const snip = await page.screenshot({ encoding: "base64" });
         snips.push({ index: i, snip });
       }),
-    Promise.resolve(),
+    (async () => {
+      // Get screenshot
+      const snip = await page.screenshot({ encoding: "base64" });
+      snips.push({ index: -1, snip });
+    })(),
   );
 
   console.log(JSON.stringify(snips));
