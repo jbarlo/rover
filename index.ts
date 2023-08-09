@@ -1,4 +1,8 @@
 import puppeteer, { type KeyInput, type Page } from "puppeteer";
+import {
+  captureHeapSnapshot,
+  findObjectsWithProperties,
+} from "puppeteer-heap-snapshot";
 
 type Step =
   | { type: "click"; selector: string }
@@ -7,10 +11,10 @@ type Step =
   | { type: "waitForNav" }
   | { type: "special"; func: (page: Page) => Promise<void> };
 
-const url: string = "https://google.com";
+const url: string = "https://www.saveonfoods.com/";
 const steps: Step[] = [
-  { type: "click", selector: "#APjFqb" },
-  { type: "type", text: "tester" },
+  { type: "click", selector: "[aria-label=search]" },
+  { type: "type", text: "deli meat" },
   { type: "press", key: "Enter" },
   { type: "waitForNav" },
 ];
@@ -72,7 +76,19 @@ const start = async (): Promise<void> => {
     })(),
   );
 
-  console.log(JSON.stringify(snips));
+  // console.log(JSON.stringify(snips));
+  const heapSnapshot = await captureHeapSnapshot(page.target());
+  console.log(
+    JSON.stringify(
+      findObjectsWithProperties(
+        heapSnapshot,
+        ["name", "price", "description", "sku"],
+        { ignoreProperties: ["nutritionProfiles", "image", "categories"] },
+      ),
+      undefined,
+      4,
+    ),
+  );
 
   await browser.close();
 };
