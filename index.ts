@@ -1,4 +1,8 @@
-import puppeteer, { type KeyInput, type Page } from "puppeteer";
+import puppeteer, {
+  type BoundingBox,
+  type KeyInput,
+  type Page,
+} from "puppeteer";
 import {
   captureHeapSnapshot,
   findObjectsWithProperties,
@@ -9,14 +13,25 @@ type Step =
   | { type: "type"; text: string }
   | { type: "press"; key: KeyInput }
   | { type: "waitForNav" }
+  | { type: "noop" }
+  | { type: "waitForIdle" }
   | { type: "special"; func: (page: Page) => Promise<void> };
 
-const url: string = "https://www.saveonfoods.com/";
-const steps: Step[] = [
-  { type: "click", selector: "[aria-label=search]" },
-  { type: "type", text: "deli meat" },
-  { type: "press", key: "Enter" },
-  { type: "waitForNav" },
+interface ScreenshotParams {
+  // skip?: boolean;
+  selector?: string;
+}
+
+type StepWithExtras = Step & { screenShotParams?: ScreenshotParams };
+
+const url: string =
+  "https://www.adriancooney.ie/blog/web-scraping-via-javascript-heap-snapshots";
+const steps: StepWithExtras[] = [
+  { type: "waitForIdle" },
+  {
+    type: "noop",
+    screenShotParams: { selector: "p.chakra-text:nth-child(10)" },
+  },
 ];
 
 const runStep = async (page: Page, thing: Step): Promise<void> => {
@@ -31,6 +46,10 @@ const runStep = async (page: Page, thing: Step): Promise<void> => {
     await page.waitForNavigation({ waitUntil: "domcontentloaded" });
   } else if (thing.type === "special") {
     await thing.func(page);
+  } else if (thing.type === "waitForIdle") {
+    await page.waitForNetworkIdle();
+  } else if (thing.type === "noop") {
+    // noop
   }
 };
 
@@ -62,11 +81,19 @@ const start = async (): Promise<void> => {
   const snips: Array<{ index: number; snip: string }> = [];
 
   await steps.reduce(
-    (promise: Promise<void>, step: Step, i: number) =>
+    (promise: Promise<void>, step: StepWithExtras, i: number) =>
       promise.then(async () => {
         await runStep(page, step);
         // Get screenshot
-        const snip = await page.screenshot({ encoding: "base64" });
+        let boundingBox: BoundingBox | undefined;
+        if (step.screenShotParams?.selector !== undefined) {
+          const el = await page.$(step.screenShotParams?.selector);
+          boundingBox = (await el?.boundingBox()) ?? undefined;
+        }
+        const snip = await page.screenshot({
+          encoding: "base64",
+          clip: boundingBox,
+        });
         snips.push({ index: i, snip });
       }),
     (async () => {
@@ -76,19 +103,19 @@ const start = async (): Promise<void> => {
     })(),
   );
 
-  // console.log(JSON.stringify(snips));
-  const heapSnapshot = await captureHeapSnapshot(page.target());
-  console.log(
-    JSON.stringify(
-      findObjectsWithProperties(
-        heapSnapshot,
-        ["name", "price", "description", "sku"],
-        { ignoreProperties: ["nutritionProfiles", "image", "categories"] },
-      ),
-      undefined,
-      4,
-    ),
-  );
+  console.log(JSON.stringify(snips));
+  // const heapSnapshot = await captureHeapSnapshot(page.target());
+  // console.log(
+  //   JSON.stringify(
+  //     findObjectsWithProperties(
+  //       heapSnapshot,
+  //       ["name", "price", "description", "sku"],
+  //       { ignoreProperties: ["nutritionProfiles", "image", "categories"] },
+  //     ),
+  //     undefined,
+  //     4,
+  //   ),
+  // );
 
   await browser.close();
 };
