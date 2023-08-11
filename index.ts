@@ -1,12 +1,5 @@
-import puppeteer, {
-  type BoundingBox,
-  type KeyInput,
-  type Page,
-} from "puppeteer";
-import {
-  captureHeapSnapshot,
-  findObjectsWithProperties,
-} from "puppeteer-heap-snapshot";
+import puppeteer, { type KeyInput, type Page } from "puppeteer";
+import fs from "fs";
 
 type Step =
   | { type: "click"; selector: string }
@@ -18,8 +11,8 @@ type Step =
   | { type: "special"; func: (page: Page) => Promise<void> };
 
 interface ScreenshotParams {
-  // skip?: boolean;
   selector?: string;
+  noSnip?: boolean;
 }
 
 type StepWithExtras = Step & { screenShotParams?: ScreenshotParams };
@@ -27,30 +20,48 @@ type StepWithExtras = Step & { screenShotParams?: ScreenshotParams };
 const url: string =
   "https://www.adriancooney.ie/blog/web-scraping-via-javascript-heap-snapshots";
 const steps: StepWithExtras[] = [
-  { type: "waitForIdle" },
+  { type: "waitForIdle", screenShotParams: { noSnip: true } },
   {
     type: "noop",
-    screenShotParams: { selector: "p.chakra-text:nth-child(10)" },
+    screenShotParams: {
+      selector: "p.chakra-text:nth-child(6)",
+      noSnip: true,
+    },
+  },
+  {
+    type: "noop",
+    screenShotParams: {
+      selector: "p.chakra-text:nth-child(10)",
+    },
   },
 ];
 
-const runStep = async (page: Page, thing: Step): Promise<void> => {
-  if (thing.type === "click") {
-    await page.waitForSelector(thing.selector, { visible: true });
-    await page.click(thing.selector);
-  } else if (thing.type === "type") {
-    await page.keyboard.type(thing.text);
-  } else if (thing.type === "press") {
-    await page.keyboard.press(thing.key);
-  } else if (thing.type === "waitForNav") {
+const runStep = async (page: Page, step: Step): Promise<void> => {
+  if (step.type === "click") {
+    await page.waitForSelector(step.selector, { visible: true });
+    await page.click(step.selector);
+  } else if (step.type === "type") {
+    await page.keyboard.type(step.text);
+  } else if (step.type === "press") {
+    await page.keyboard.press(step.key);
+  } else if (step.type === "waitForNav") {
     await page.waitForNavigation({ waitUntil: "domcontentloaded" });
-  } else if (thing.type === "special") {
-    await thing.func(page);
-  } else if (thing.type === "waitForIdle") {
+  } else if (step.type === "special") {
+    await step.func(page);
+  } else if (step.type === "waitForIdle") {
     await page.waitForNetworkIdle();
-  } else if (thing.type === "noop") {
+  } else if (step.type === "noop") {
     // noop
   }
+};
+
+const getSnip = async (page: Page, step: StepWithExtras): Promise<string> => {
+  if (step.screenShotParams?.selector !== undefined) {
+    const el = await page.$(step.screenShotParams?.selector);
+    if (el === null) throw new Error("No matching selector");
+    return (await el.screenshot({ encoding: "base64" })).toString();
+  }
+  return (await page.screenshot({ encoding: "base64" })).toString();
 };
 
 const start = async (): Promise<void> => {
@@ -85,17 +96,10 @@ const start = async (): Promise<void> => {
       promise.then(async () => {
         await runStep(page, step);
         // Get screenshot
-        let boundingBox: BoundingBox | undefined;
-        if (step.screenShotParams?.selector !== undefined) {
-          const el = await page.$(step.screenShotParams?.selector);
-          el?.scrollIntoView();
-          boundingBox = (await el?.boundingBox()) ?? undefined;
+        if (step.screenShotParams?.noSnip !== true) {
+          const snip = await getSnip(page, step);
+          snips.push({ index: i, snip });
         }
-        const snip = await page.screenshot({
-          encoding: "base64",
-          clip: boundingBox,
-        });
-        snips.push({ index: i, snip });
       }),
     (async () => {
       // Get screenshot
@@ -104,7 +108,7 @@ const start = async (): Promise<void> => {
     })(),
   );
 
-  console.log(JSON.stringify(snips));
+  fs.writeFileSync("./out.json", JSON.stringify(snips));
   // const heapSnapshot = await captureHeapSnapshot(page.target());
   // console.log(
   //   JSON.stringify(
