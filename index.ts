@@ -88,6 +88,7 @@ const start = async (): Promise<void> => {
         let boundingBox: BoundingBox | undefined;
         if (step.screenShotParams?.selector !== undefined) {
           const el = await page.$(step.screenShotParams?.selector);
+          el?.scrollIntoView();
           boundingBox = (await el?.boundingBox()) ?? undefined;
         }
         const snip = await page.screenshot({
