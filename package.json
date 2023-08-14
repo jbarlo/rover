@@ -1,28 +1,31 @@
 {
-    "private": true,
-    "sideEffects": false,
-    "scripts": {
-        "start": "ts-node index.ts",
-        "typecheck": "tsc"
-    },
-    "devDependencies": {
-        "@types/puppeteer": "^7.0.4",
-        "@typescript-eslint/eslint-plugin": "^5.62.0",
-        "eslint": "^8.46.0",
-        "eslint-config-prettier": "^8.9.0",
-        "eslint-config-standard-with-typescript": "^37.0.0",
-        "eslint-plugin-import": "^2.28.0",
-        "eslint-plugin-n": "^16.0.1",
-        "eslint-plugin-prettier": "^5.0.0",
-        "eslint-plugin-promise": "^6.1.1",
-        "prettier": "^3.0.0",
-        "ts-node": "^10.9.1",
-        "typescript": "^5.1.6"
-    },
-    "engines": {
-        "node": ">=14.0.0"
-    },
-    "dependencies": {
-        "puppeteer-heap-snapshot": "^0.1.8"
-    }
+  "private": true,
+  "sideEffects": false,
+  "scripts": {
+    "start": "ts-node index.ts",
+    "typecheck": "tsc"
+  },
+  "workspaces": [
+    "web"
+  ],
+  "devDependencies": {
+    "@types/puppeteer": "^7.0.4",
+    "@typescript-eslint/eslint-plugin": "^5.62.0",
+    "eslint": "^8.46.0",
+    "eslint-config-prettier": "^8.9.0",
+    "eslint-config-standard-with-typescript": "^37.0.0",
+    "eslint-plugin-import": "^2.28.0",
+    "eslint-plugin-n": "^16.0.1",
+    "eslint-plugin-prettier": "^5.0.0",
+    "eslint-plugin-promise": "^6.1.1",
+    "prettier": "^3.0.0",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.1.6"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "dependencies": {
+    "puppeteer-heap-snapshot": "^0.1.8"
+  }
 }
