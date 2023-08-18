@@ -1,4 +1,6 @@
 import puppeteer, { type KeyInput, type Page } from "puppeteer";
+import dayjs from "dayjs";
+import crypto from "crypto";
 import fs from "fs";
 
 type Step =
@@ -17,24 +19,26 @@ interface ScreenshotParams {
 
 type StepWithExtras = Step & { screenShotParams?: ScreenshotParams };
 
-const url: string =
-  "https://www.adriancooney.ie/blog/web-scraping-via-javascript-heap-snapshots";
-const steps: StepWithExtras[] = [
-  { type: "waitForIdle", screenShotParams: { noSnip: true } },
-  {
-    type: "noop",
-    screenShotParams: {
-      selector: "p.chakra-text:nth-child(6)",
-      noSnip: true,
+const config: { alias: string; url: string; steps: StepWithExtras[] } = {
+  alias: "test",
+  url: "https://www.adriancooney.ie/blog/web-scraping-via-javascript-heap-snapshots",
+  steps: [
+    { type: "waitForIdle", screenShotParams: { noSnip: true } },
+    {
+      type: "noop",
+      screenShotParams: {
+        selector: "p.chakra-text:nth-child(6)",
+        noSnip: true,
+      },
     },
-  },
-  {
-    type: "noop",
-    screenShotParams: {
-      selector: "p.chakra-text:nth-child(10)",
+    {
+      type: "noop",
+      screenShotParams: {
+        selector: "p.chakra-text:nth-child(10)",
+      },
     },
-  },
-];
+  ],
+};
 
 const runStep = async (page: Page, step: Step): Promise<void> => {
   if (step.type === "click") {
@@ -69,7 +73,7 @@ const start = async (): Promise<void> => {
     defaultViewport: { width: 1920, height: 1080 },
   });
   const page = await browser.newPage();
-  await page.goto(url, { waitUntil: "domcontentloaded" });
+  await page.goto(config.url, { waitUntil: "domcontentloaded" });
 
   // Remove scripts
   // await page.evaluate(() => {
@@ -91,7 +95,7 @@ const start = async (): Promise<void> => {
 
   const snips: Array<{ index: number; snip: string }> = [];
 
-  await steps.reduce(
+  await config.steps.reduce(
     (promise: Promise<void>, step: StepWithExtras, i: number) =>
       promise.then(async () => {
         await runStep(page, step);
@@ -108,7 +112,19 @@ const start = async (): Promise<void> => {
     })(),
   );
 
-  fs.writeFileSync("./out.json", JSON.stringify(snips));
+  const now = dayjs().toISOString();
+
+  const stepsHash = crypto
+    .createHash("md5")
+    .update(JSON.stringify(config.steps))
+    .digest("hex");
+
+  const dir = `./output/${config.alias}-${stepsHash}`;
+
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  fs.writeFileSync(`${dir}/${now}.json`, JSON.stringify(snips));
   // const heapSnapshot = await captureHeapSnapshot(page.target());
   // console.log(
   //   JSON.stringify(

@@ -26,6 +26,7 @@
     "node": ">=14.0.0"
   },
   "dependencies": {
+    "dayjs": "^1.11.9",
     "puppeteer-heap-snapshot": "^0.1.8"
   }
 }
