@@ -3,6 +3,11 @@ import dayjs from "dayjs";
 import crypto from "crypto";
 import fs from "fs";
 
+export interface Snip {
+  index: number;
+  snip: string;
+}
+
 type Step =
   | { type: "click"; selector: string }
   | { type: "type"; text: string }
@@ -93,7 +98,7 @@ const start = async (): Promise<void> => {
   // Reload content
   // await page2.setContent(content);
 
-  const snips: Array<{ index: number; snip: string }> = [];
+  const snips: Snip[] = [];
 
   await config.steps.reduce(
     (promise: Promise<void>, step: StepWithExtras, i: number) =>
