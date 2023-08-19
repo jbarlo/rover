@@ -1,4 +1,5 @@
 {
+  "name":"puppetexp",
   "private": true,
   "sideEffects": false,
   "scripts": {
