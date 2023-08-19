@@ -79,6 +79,8 @@ export const getDiffs = <
       return {
         numDifferentPixels,
         diffImg: PNG.sync.write(diff).toString("base64"),
+        width,
+        height,
       };
     });
     return { diffs, snipFlows: orderedFlows };

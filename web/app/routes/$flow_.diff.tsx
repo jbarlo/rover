@@ -34,15 +34,22 @@ export default function Index() {
       </Link>
       <div>
         <h2>Diffs</h2>
-        {map(diff?.diffs, (o) => (
-          <div>
-            <div>Pixel difference: {o.numDifferentPixels}</div>
-            <img
-              src={`data:image/png;base64, ${o.diffImg}`}
-              style={{ maxWidth: "100%" }}
-            />
-          </div>
-        ))}
+        {map(diff?.diffs, (o) => {
+          const totalPixels = o.width * o.height;
+          return (
+            <div>
+              <div>
+                {`Similarity: ${
+                  ((totalPixels - o.numDifferentPixels) / totalPixels) * 100
+                }%`}
+              </div>
+              <img
+                src={`data:image/png;base64, ${o.diffImg}`}
+                style={{ maxWidth: "100%" }}
+              />
+            </div>
+          );
+        })}
       </div>
     </div>
   );
