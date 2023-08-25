@@ -1,49 +1,15 @@
-import puppeteer, { type KeyInput, type Page } from "puppeteer";
+import puppeteer, { type Page } from "puppeteer";
 import dayjs from "dayjs";
 import crypto from "crypto";
 import fs from "fs";
+import { isNil } from "lodash";
+import type { StepWithExtras, Step } from "./types";
+import { getStepConfigs } from "./utils";
 
 export interface Snip {
   index: number;
   snip: string;
 }
-
-type Step =
-  | { type: "click"; selector: string }
-  | { type: "type"; text: string }
-  | { type: "press"; key: KeyInput }
-  | { type: "waitForNav" }
-  | { type: "noop" }
-  | { type: "waitForIdle" }
-  | { type: "special"; func: (page: Page) => Promise<void> };
-
-interface ScreenshotParams {
-  selector?: string;
-  noSnip?: boolean;
-}
-
-type StepWithExtras = Step & { screenShotParams?: ScreenshotParams };
-
-const config: { alias: string; url: string; steps: StepWithExtras[] } = {
-  alias: "test",
-  url: "https://www.adriancooney.ie/blog/web-scraping-via-javascript-heap-snapshots",
-  steps: [
-    { type: "waitForIdle", screenShotParams: { noSnip: true } },
-    {
-      type: "noop",
-      screenShotParams: {
-        selector: "p.chakra-text:nth-child(6)",
-        noSnip: true,
-      },
-    },
-    {
-      type: "noop",
-      screenShotParams: {
-        selector: "p.chakra-text:nth-child(10)",
-      },
-    },
-  ],
-};
 
 const runStep = async (page: Page, step: Step): Promise<void> => {
   if (step.type === "click") {
@@ -74,6 +40,10 @@ const getSnip = async (page: Page, step: StepWithExtras): Promise<string> => {
 };
 
 const start = async (): Promise<void> => {
+  // TODO multi-config run
+  const config = getStepConfigs(".")?.[0]?.config;
+  if (isNil(config)) return;
+
   const browser = await puppeteer.launch({
     defaultViewport: { width: 1920, height: 1080 },
   });

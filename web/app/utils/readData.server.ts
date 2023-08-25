@@ -1,26 +1,21 @@
-import fs from "fs";
-import { filter, isNil, isString, last, map } from "lodash";
+import { isNil, last, map } from "lodash";
 import type { Snip } from "../../../index";
+import { getPathContents } from "../../../utils";
 
 const outputDir = `${__dirname}/../../output`;
 
 export const getOutputData = () => {
-  const paths = fs.readdirSync(outputDir, {
-    recursive: true,
-  });
-  const strPaths = filter(paths, isString);
+  const pathContents = getPathContents(
+    outputDir,
+    (path) => !isNil(path.match(/\.json$/)),
+  );
 
-  // return only json paths
-  const jsonPaths = filter(strPaths, (path) => !isNil(path.match(/\.json$/)));
-
-  const jsonList = map(jsonPaths, (path) => {
+  const jsonList = map(pathContents, ({ path, content }) => {
     const splitPath = path.split("/");
     return {
       alias: splitPath[0],
       timestamp: last(splitPath)?.replace(/\.json$/, ""),
-      snips: JSON.parse(
-        fs.readFileSync(`${outputDir}/${path}`).toString(),
-      ) as Snip[],
+      snips: JSON.parse(content.toString()) as Snip[],
     };
   });
   return jsonList;

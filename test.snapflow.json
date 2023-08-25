@@ -1,0 +1,20 @@
+{
+  "alias": "test",
+  "url": "https://www.adriancooney.ie/blog/web-scraping-via-javascript-heap-snapshots",
+  "steps": [
+    { "type": "waitForIdle", "screenShotParams": { "noSnip": true } },
+    {
+      "type": "noop",
+      "screenShotParams": {
+        "selector": "p.chakra-text:nth-child(6)",
+        "noSnip": true
+      }
+    },
+    {
+      "type": "noop",
+      "screenShotParams": {
+        "selector": "p.chakra-text:nth-child(10)"
+      }
+    }
+  ]
+}
