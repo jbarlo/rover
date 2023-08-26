@@ -1,0 +1,12 @@
+{
+  "url": "https://elixir-lang.org/getting-started/modules-and-functions.html",
+  "steps": [
+    { "type": "waitForIdle", "screenShotParams": { "noSnip": true } },
+    {
+      "type": "noop",
+      "screenShotParams": {
+        "selector": "#content > article:nth-child(1) > p:nth-child(9)"
+      }
+    }
+  ]
+}
