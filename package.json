@@ -1,9 +1,11 @@
 {
-  "name":"puppetexp",
+  "name": "snapflow",
   "private": true,
   "sideEffects": false,
   "scripts": {
-    "start": "ts-node index.ts",
+    "start": "npm run snap && npm run view",
+    "snap": "ts-node index.ts",
+    "view": "npm run dev -w=web",
     "typecheck": "tsc"
   },
   "workspaces": [
