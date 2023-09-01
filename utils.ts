@@ -26,7 +26,8 @@ export const getStepConfigs = (rootDir: string) => {
     (path) => !isNil(path.match(/\.snapflow\.json$/)),
   );
 
-  const configList = map(pathContents, ({ content }) => ({
+  const configList = map(pathContents, ({ path, content }) => ({
+    filename: path.match(/(\w+)\.snapflow\.json$/)?.[1] ?? "",
     config: JSON.parse(content.toString()) as StepConfig,
   }));
   return configList;
