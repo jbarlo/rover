@@ -2,10 +2,15 @@
   "name": "snapflow",
   "private": true,
   "sideEffects": false,
+  "bin": {
+    "snapflow": "./bin/start.js",
+    "snap": "./bin/snap.js",
+    "view": "./bin/view.js"
+  },
   "scripts": {
-    "start": "npm run snap && npm run view",
-    "snap": "ts-node index.ts",
-    "view": "npm run dev -w=web",
+    "snapflow:start": "npm run snap && npm run view",
+    "snapflow:snap": "ts-node index.ts",
+    "snapflow:view": "npm run dev -w=web",
     "typecheck": "tsc"
   },
   "workspaces": [
@@ -30,6 +35,7 @@
   },
   "dependencies": {
     "dayjs": "^1.11.9",
-    "puppeteer-heap-snapshot": "^0.1.8"
+    "puppeteer-heap-snapshot": "^0.1.8",
+    "shelljs": "^0.8.5"
   }
 }
