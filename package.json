@@ -2,7 +2,7 @@
   "name": "snapflow",
   "sideEffects": false,
   "bin": {
-    "view": "./bin/view.js"
+    "snapflow:view": "./bin/view.js"
   },
   "files": [
     "dist",
