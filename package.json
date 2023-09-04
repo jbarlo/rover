@@ -1,12 +1,22 @@
 {
   "name": "snapflow",
   "sideEffects": false,
+  "bin": {
+    "view": "./bin/view.js"
+  },
+  "files": [
+    "dist",
+    "bin"
+  ],
   "scripts": {
     "start": "npm run snap && npm run view",
     "snap": "ts-node index.ts",
     "view": "npm run dev -w=web",
     "typecheck": "tsc",
-    "build": "tsc --build"
+    "build": "npm run build:snap && npm run build:web",
+    "build:snap": "tsc --build",
+    "build:web": "npm run build -w=web && cp -r ./web/build ./dist/web",
+    "serve": "remix-serve ./dist/web"
   },
   "workspaces": [
     "web"
@@ -29,6 +39,7 @@
     "node": ">=14.0.0"
   },
   "dependencies": {
+    "@remix-run/serve": "^1.19.3",
     "dayjs": "^1.11.9",
     "puppeteer-heap-snapshot": "^0.1.8",
     "shelljs": "^0.8.5"
