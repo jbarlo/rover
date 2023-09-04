@@ -5,7 +5,8 @@
     "start": "npm run snap && npm run view",
     "snap": "ts-node index.ts",
     "view": "npm run dev -w=web",
-    "typecheck": "tsc"
+    "typecheck": "tsc",
+    "build": "tsc --build"
   },
   "workspaces": [
     "web"
