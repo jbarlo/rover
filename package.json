@@ -1,6 +1,5 @@
 {
   "name": "snapflow",
-  "version": "0.0.3",
   "sideEffects": false,
   "bin": {
     "snapflow": "./bin/start.js",
