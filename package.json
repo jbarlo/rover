@@ -44,5 +44,5 @@
     "puppeteer-heap-snapshot": "^0.1.8",
     "shelljs": "^0.8.5"
   },
-  "version": "0.0.4"
+  "version": "0.0.5"
 }
