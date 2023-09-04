@@ -1,15 +1,10 @@
 {
   "name": "snapflow",
   "sideEffects": false,
-  "bin": {
-    "snapflow": "./bin/start.js",
-    "snap": "./bin/snap.js",
-    "view": "./bin/view.js"
-  },
   "scripts": {
-    "snapflow:start": "npm run snapflow:snap && npm run snapflow:view",
-    "snapflow:snap": "ts-node index.ts",
-    "snapflow:view": "npm run dev -w=web",
+    "start": "npm run snap && npm run view",
+    "snap": "ts-node index.ts",
+    "view": "npm run dev -w=web",
     "typecheck": "tsc"
   },
   "workspaces": [
