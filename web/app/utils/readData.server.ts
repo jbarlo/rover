@@ -1,11 +1,12 @@
 import { isNil, last, map, mapValues, orderBy, groupBy } from "lodash";
 import { PNG } from "pngjs";
 import dayjs from "dayjs";
+import path from "path";
 import Pixelmatch from "pixelmatch";
 import type { Snip } from "../../../index";
 import { getPathContents } from "../../../utils";
 
-const outputDir = `${__dirname}/../../output`;
+export const outputDir = path.resolve(process.env.SNAP_DIR ?? "./snaps");
 
 export const getOutputData = () => {
   const pathContents = getPathContents(

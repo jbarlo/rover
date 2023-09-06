@@ -5,6 +5,7 @@ import fs from "fs";
 import { isNil, map, forEach } from "lodash";
 import type { StepWithExtras, Step } from "./types";
 import { getStepConfigs } from "./utils";
+import { outputDir } from "./web/app/utils/readData.server";
 
 export interface Snip {
   index: number;
@@ -96,7 +97,7 @@ const start = () => {
       .update(JSON.stringify(config.steps))
       .digest("hex");
 
-    const dir = `./output/${config.alias}-${stepsHash}`;
+    const dir = `${outputDir}/${config.alias}-${stepsHash}`;
 
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });

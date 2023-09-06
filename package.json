@@ -2,7 +2,7 @@
   "name": "snapflow",
   "sideEffects": false,
   "bin": {
-    "snapflow:view": "./bin/view.js"
+    "snapflow-view": "./bin/view.js"
   },
   "files": [
     "dist",
@@ -11,12 +11,12 @@
   "scripts": {
     "start": "npm run snap && npm run view",
     "snap": "ts-node index.ts",
-    "view": "npm run dev -w=web",
+    "view": "SNAP_DIR=\"../snaps\" npm run dev -w=web",
     "typecheck": "tsc",
     "build": "npm run build:snap && npm run build:web",
     "build:snap": "tsc --build",
     "build:web": "npm run build -w=web && cp -r ./web/build ./dist/web",
-    "serve": "remix-serve ./dist/web"
+    "serve": "SNAP_DIR=\"./snaps\" remix-serve ./dist/web"
   },
   "workspaces": [
     "web"
