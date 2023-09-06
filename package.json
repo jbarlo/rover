@@ -2,6 +2,7 @@
   "name": "snapflow",
   "sideEffects": false,
   "bin": {
+    "snapflow-snap": "./bin/snap.js",
     "snapflow-view": "./bin/view.js"
   },
   "files": [
