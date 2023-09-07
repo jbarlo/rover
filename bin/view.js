@@ -2,6 +2,9 @@
 
 const shell = require("shelljs");
 const path = require("path");
+const { getConfig } = require("../dist/snap/getConfig");
+
+const { port } = getConfig();
 
 const distWebPath = path.resolve(__dirname, "../dist/web");
-shell.exec(`remix-serve ${distWebPath}`);
+shell.exec(`PORT="${port}" remix-serve ${distWebPath}`);

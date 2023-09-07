@@ -5,8 +5,11 @@ import path from "path";
 import Pixelmatch from "pixelmatch";
 import type { Snip } from "../../../index";
 import { getPathContents } from "../../../utils";
+import { getConfig } from ".././../../getConfig";
 
-export const outputDir = path.resolve(process.env.SNAP_DIR ?? "./snaps");
+const { snapDir } = getConfig();
+
+export const outputDir = path.resolve(snapDir);
 
 export const getOutputData = () => {
   const pathContents = getPathContents(
