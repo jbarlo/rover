@@ -12,7 +12,7 @@
   "scripts": {
     "start": "npm run snap && npm run view",
     "snap": "ts-node index.ts",
-    "view": "SNAP_DIR=\"../snaps\" npm run dev -w=web",
+    "view": "SNAP_DIR=\"../snaps\" SNAPFLOW_CONF=\"../snapflowconfig.json\" npm run dev -w=web",
     "typecheck": "tsc",
     "build": "npm run build:snap && npm run build:web",
     "build:snap": "tsc --build",
