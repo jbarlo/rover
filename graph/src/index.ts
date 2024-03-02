@@ -1,60 +1,5 @@
-import { Edges, createStates } from "./states.js";
+import { states as allStates, edges as allEdges } from "./state.js";
 import _ from "lodash";
-
-const allStates = createStates([
-  { id: "1" },
-  { id: "1-1" },
-  { id: "1-2" },
-  { id: "1-2-1" },
-  { id: "1-2-1-1" },
-  { id: "1-2-2" },
-]);
-
-const allEdges: Edges<typeof allStates> = [
-  { from: "1", to: "1-1", name: "go-to-1-1", action: () => {} },
-  {
-    from: "1-2",
-    to: "1-2",
-    name: "1-2-self-loop",
-    action: () => {},
-    cleanup: () => {},
-  },
-  {
-    from: "1",
-    to: "1-2",
-    name: "go-to-1-2",
-    action: () => {},
-    cleanup: () => {},
-  },
-  {
-    from: "1-2",
-    to: "1-2-1",
-    name: "go-to-1-2-1",
-    action: () => {},
-    cleanup: () => {},
-  },
-  {
-    from: "1-2-1",
-    to: "1-2-1-1",
-    name: "go-to-1-2-1-1",
-    action: () => {},
-    cleanup: () => {},
-  },
-  {
-    from: "1-2",
-    to: "1-2-2",
-    name: "go-to-1-2-2",
-    action: () => {},
-    cleanup: () => {},
-  },
-  {
-    from: "1",
-    to: "1-2-2",
-    name: "sneak-to-1-2-2",
-    action: () => {},
-    cleanup: () => {},
-  },
-];
 
 const parseGraphValidity = (s: typeof allStates, e: typeof allEdges) => {
   if (s.length !== _.uniqBy(s, "id").length) {
@@ -79,7 +24,7 @@ const findState = (
 
 interface Step {
   edgeName: string;
-  type: "action" | "cleanup";
+  type: "prep" | "action" | "cleanup";
 }
 
 const wasEdgeTraversed = (edgeName: string, steps: Step[]) =>
@@ -89,7 +34,9 @@ type VisitedStatesRecord = Partial<
   Record<(typeof allStates)[number]["id"], boolean>
 >;
 
-const traverseEdgesFromState = (
+// recursively traverses the graph using DFS, scheduling actions and cleanups.
+// avoids retreading visited states
+const traverseDFS = (
   e: typeof allEdges,
   state: (typeof allStates)[number],
   visitedStates: VisitedStatesRecord = {}
@@ -108,7 +55,7 @@ const traverseEdgesFromState = (
       return []; // already visited, skip
     const nextState = findState(edge.to, allStates);
 
-    const result = traverseEdgesFromState(e, nextState, currVisitedStates);
+    const result = traverseDFS(e, nextState, currVisitedStates);
 
     const toReturn = [
       { edgeName: edge.name, type: "action" as const },
@@ -135,19 +82,47 @@ const traverseEdgesFromState = (
   return { steps: currSteps, visitedStates: currVisitedStates };
 };
 
+const simpleScheduler = (
+  states: typeof allStates,
+  edges: typeof allEdges
+): Step[] =>
+  _.flatMap(edges, (edge) => [
+    { edgeName: edge.name, type: "prep" },
+    { edgeName: edge.name, type: "action" },
+    { edgeName: edge.name, type: "cleanup" },
+  ]);
+
 // produce a list of edge action and cleanup steps that trace a path through the graph
-const runScheduler = (states: typeof allStates, edges: typeof allEdges) => {
-  // determine good starting state(s) by finding tributaries
+const runScheduler = (
+  states: typeof allStates,
+  edges: typeof allEdges
+): Step[] => {
+  // for now, run every edge's prep, action, and cleanup
+  return simpleScheduler(states, edges);
 
-  const state = states[0]!; // TODO
+  // TODO new scheduler
+  // determine starting states from urls
+  // ensure all edges are traversable from starting states. conditional edges, etc
+  // automatically calculate prep and cleanup paths to resolve effects
+  // run each edge's prep, action, and cleanup -- do snapshotting, etc
 
-  console.log(traverseEdgesFromState(edges, state));
+  // console.log(traverseDFS(edges, states[0]!));
+};
+
+const runSteps = (steps: Step[], edges: typeof allEdges) => {
+  _.forEach(steps, (step) => {
+    const edge = edges.find((e) => e.name === step.edgeName)!;
+    if (_.isNil(edge)) return true; // continue
+    edge[step.type]?.();
+  });
 };
 
 async function main() {
   parseGraphValidity(allStates, allEdges);
 
-  runScheduler(allStates, allEdges);
+  const steps = runScheduler(allStates, allEdges);
+
+  runSteps(steps, allEdges);
 }
 
 main();
