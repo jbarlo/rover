@@ -104,12 +104,12 @@ const runScheduler = (
   // determine starting states from urls
   // ensure all edges are traversable from starting states. conditional edges, etc
   // automatically calculate prep and cleanup paths to resolve effects
-  // run each edge's prep, action, and cleanup -- do snapshotting, etc
 
   // console.log(traverseDFS(edges, states[0]!));
 };
 
 const runSteps = (steps: Step[], edges: typeof allEdges) => {
+  // run each edge's prep, action, and cleanup -- do snapshotting, etc
   _.forEach(steps, (step) => {
     const edge = edges.find((e) => e.name === step.edgeName)!;
     if (_.isNil(edge)) return true; // continue
