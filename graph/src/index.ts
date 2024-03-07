@@ -1,5 +1,6 @@
+import { Cond, UnwrapCond, condIsAnd, evaluateCond } from "./graph.js";
 import { states as allStates, edges as allEdges } from "./state.js";
-import _, { isNil } from "lodash";
+import _ from "lodash";
 
 const parseGraphValidity = (s: typeof allStates, e: typeof allEdges) => {
   if (s.length !== _.uniqBy(s, "id").length) {
@@ -97,7 +98,7 @@ const traversabilityCheck = (
   states: typeof allStates,
   edges: typeof allEdges
 ) => {
-  const startingStates = states.filter((s) => !isNil(s.url));
+  const startingStates = states.filter((s) => !_.isNil(s.url));
   if (startingStates.length === 0) return false;
 
   const stateDict = {
@@ -130,16 +131,109 @@ const traversabilityCheck = (
   return _.every(stateDict);
 };
 
-// Check if all conditional edges have some route from a starting state that satisfies their conditions
+const iterLimit = 10;
+
+// Check if all conditional edges have some route from a starting state that
+// satisfies their conditions
 const naiveSatisfiabilityCheck = (
   states: typeof allStates,
   edges: typeof allEdges
 ): boolean => {
-  // for every conditionally traversable edge, backprop condition until one of the following:
-  //   - a starting state is reached with a condition that passes with an empty state
-  //   - no valid conditional edges exist
-  //   - there are no edges to backprop to
-  //   - some constant number of iterations is reached
+  type EdgeConditionWithResource = UnwrapCond<
+    NonNullable<(typeof edges)[number]["condition"]>
+  >;
+
+  const verifyCond = (
+    value: number,
+    resource: EdgeConditionWithResource["resource"],
+    cond: Cond<EdgeConditionWithResource | boolean>
+  ): boolean =>
+    evaluateCond(cond, (c) => {
+      if (_.isBoolean(c)) return c;
+      if (c.resource === resource) {
+        if (c.operator === "lt") return value < c.value;
+        if (c.operator === "gt") return value > c.value;
+      }
+      return true;
+    });
+
+  // `keyBy` doesn't preserve string literals since the input may not contain
+  // all possible keys, but all edges are provided here.
+  // TODO associate this with the createEdges function
+  const nameKeyedEdges = _.keyBy(edges, "name") as Record<
+    (typeof edges)[number]["name"],
+    (typeof edges)[number]
+  >;
+
+  const conditionStrippedEdges = edges.map((edge) => _.omit(edge, "condition"));
+
+  const startingStates = states.filter((s) => !_.isNil(s.url));
+  const conditionalEdges = edges.filter((e) => !_.isNil(e.condition));
+
+  _.forEach(conditionalEdges, (conditionalEdge) => {
+    const edgeConditionMap: Record<
+      (typeof edges)[number]["name"],
+      Cond<EdgeConditionWithResource | boolean>
+    > = _.mapValues(nameKeyedEdges, (edge) =>
+      _.cloneDeep(edge.condition ?? true)
+    );
+
+    // for every conditionally traversable edge, backprop condition until one of the following:
+    //   - a starting state is reached with a condition that passes with an empty state (succeed)
+    //   - if all conditional edges are invalid (fail early)
+    //   - there are no edges left to backprop to (fail early)
+    //   - some constant number of iterations is reached (fail)
+
+    // backpropagation on edge A is defined as:
+    //  - if any edge B points to edge A, edge B's condition becomes its
+    //    existing condition AND edge A's condition
+
+    // initialize horizon with conditional edge
+    let backpropHorizon = [conditionalEdge];
+
+    _.forEach(_.range(iterLimit), () => {
+      // per iteration, generate next horizon
+      const newBackpropHorizon = _.uniqBy(
+        _.flatMap(backpropHorizon, (backpropHorizonEdge) => {
+          // get all edges that point to backpropHorizonEdge
+          const backEdges = conditionStrippedEdges.filter(
+            (e) => e.to === backpropHorizonEdge.from
+          );
+
+          // propagate the condition from backpropHorizonEdge to backEdges
+          _.forEach(backEdges, (backEdge) => {
+            const backproppedCondition =
+              edgeConditionMap[backpropHorizonEdge.name];
+            // TODO modify backproppedCondition based on edge effects
+
+            const edgeCondition = edgeConditionMap[backEdge.name];
+            edgeConditionMap[backEdge.name] = _.cloneDeep({
+              _and: [
+                ...(condIsAnd(edgeCondition)
+                  ? edgeCondition._and
+                  : [edgeCondition]),
+                backproppedCondition,
+              ],
+            });
+          });
+
+          return backEdges;
+        }),
+        "name"
+      );
+
+      // TODO filter newBackPropHorizon of any invalid conditions
+
+      // TODO if newBackpropHorizon is empty, fail
+
+      // TODO if newBackpropHorizon contains an edge off of the starting state,
+      // and the condition is valid, succeed
+
+      // TODO set backpropHorizon to newBackpropHorizon
+    });
+
+    // TODO if iterLimit is reached, fail
+  });
 
   // if every conditional edge has a valid path, return true
 

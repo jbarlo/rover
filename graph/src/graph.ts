@@ -20,10 +20,10 @@ type ParseIdFromStates<T extends State<string>[]> = T[number] extends State<
 
 type AndCond<T> = { _and: Cond<T>[] };
 type OrCond<T> = { _or: Cond<T>[] };
-type Cond<T> = T | AndCond<T> | OrCond<T>;
-const condIsAnd = <T>(cond: Cond<T>): cond is AndCond<T> =>
+export type Cond<T> = T | AndCond<T> | OrCond<T>;
+export const condIsAnd = <T>(cond: Cond<T>): cond is AndCond<T> =>
   _.isObject(cond) && _.has(cond, "_and");
-const condIsOr = <T>(cond: Cond<T>): cond is OrCond<T> =>
+export const condIsOr = <T>(cond: Cond<T>): cond is OrCond<T> =>
   _.isObject(cond) && _.has(cond, "_or");
 
 export const evaluateCond = <T>(
@@ -37,6 +37,8 @@ export const evaluateCond = <T>(
   return predicate(cond);
 };
 
+export type UnwrapCond<T> = T extends Cond<infer U> ? U : never;
+
 type DefinedEdgeCondition<Resource extends string> = {
   resource: Resource;
   value: number;
@@ -47,10 +49,14 @@ type EdgeCondition<Resource extends string | null> = Resource extends string
   ? Cond<DefinedEdgeCondition<Resource>>
   : undefined;
 
-interface BaseEdge<ID extends string, Resource extends string | null = null> {
+interface BaseEdge<
+  EdgeName extends string,
+  ID extends string,
+  Resource extends string | null = null
+> {
   from: ID;
   to: ID;
-  name: string;
+  name: EdgeName;
   // the changes made to resources through the action
   resourceEffects?: Resource extends string
     ? Partial<Record<Resource, number>>
@@ -67,6 +73,19 @@ interface BaseEdge<ID extends string, Resource extends string | null = null> {
 }
 
 export type Edges<
+  EdgeName extends string,
   States extends State<string>[],
   Resource extends string | null = null
-> = BaseEdge<ParseIdFromStates<States>, Resource>[];
+> = BaseEdge<EdgeName, ParseIdFromStates<States>, Resource>[];
+
+export const createEdges = <
+  EdgeName extends string,
+  States extends State<string>[],
+  Resource extends string | undefined = undefined
+>(
+  edges: Edges<EdgeName, States, Resource extends undefined ? null : Resource>,
+  states: States,
+  resources?: Resource
+) => {
+  return edges;
+};
