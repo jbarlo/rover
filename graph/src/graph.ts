@@ -16,10 +16,14 @@ type ParseIdFromStates<T extends State<string>[]> = T[number] extends State<
   ? ID
   : never;
 
-interface BaseEdge<ID extends string> {
+interface BaseEdge<ID extends string, Resource extends string | null = null> {
   from: ID;
   to: ID;
   name: string;
+  // the changes made to resources through the action
+  resourceEffects?: Resource extends string
+    ? Partial<Record<Resource, number>>
+    : undefined;
   // TODO -- very inefficient to define reusable prep and cleanup since nav and effects
   // should be performable via UI.
   // the graph should be able to determine what resources are needed for each action,
@@ -30,6 +34,7 @@ interface BaseEdge<ID extends string> {
   virtual?: boolean;
 }
 
-export type Edges<States extends State<string>[]> = BaseEdge<
-  ParseIdFromStates<States>
->[];
+export type Edges<
+  States extends State<string>[],
+  Resource extends string | null = null
+> = BaseEdge<ParseIdFromStates<States>, Resource>[];

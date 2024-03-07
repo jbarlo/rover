@@ -1,5 +1,5 @@
 import { states as allStates, edges as allEdges } from "./state.js";
-import _ from "lodash";
+import _, { isNil } from "lodash";
 
 const parseGraphValidity = (s: typeof allStates, e: typeof allEdges) => {
   if (s.length !== _.uniqBy(s, "id").length) {
@@ -92,6 +92,52 @@ const simpleScheduler = (
     { edgeName: edge.name, type: "cleanup" },
   ]);
 
+// Check if all states are reachable from starting states
+const traversabilityCheck = (
+  states: typeof allStates,
+  edges: typeof allEdges
+) => {
+  const startingStates = states.filter((s) => !isNil(s.url));
+  if (startingStates.length === 0) return false;
+
+  const stateDict = {
+    ..._.mapValues(_.keyBy(states, "id"), () => false),
+    ..._.mapValues(_.keyBy(startingStates, "id"), () => true),
+  };
+  const edgeDict = _.mapValues(_.keyBy(edges, "name"), () => false);
+  let edgeHorizon = _.uniqBy(
+    _.flatMap(startingStates, (s) => edges.filter((e) => e.from === s.id)),
+    "name"
+  );
+
+  while (edgeHorizon.length > 0) {
+    const newEdgeHorizon: typeof allEdges = _.flatMap(edgeHorizon, (s) => {
+      edgeDict[s.name] = true;
+      if (!stateDict[s.to]) {
+        stateDict[s.to] = true;
+        // add outbound edges to edge horizon if not in edge dict
+        const outboundEdges = edges.filter(
+          (e) => e.from === s.to && !edgeDict[e.name]
+        );
+        return outboundEdges;
+      }
+      return [];
+    });
+
+    edgeHorizon = _.uniqBy(newEdgeHorizon, "name");
+  }
+
+  return _.every(stateDict);
+};
+
+const naiveSatisfiabilityCheck = (
+  states: typeof allStates,
+  edges: typeof allEdges
+): boolean => {
+  // TODO
+  return true;
+};
+
 // produce a list of edge action and cleanup steps that trace a path through the graph
 const runScheduler = (
   states: typeof allStates,
@@ -102,8 +148,16 @@ const runScheduler = (
 
   // TODO new scheduler
   // determine starting states from urls
+  // create implied edges from starting states to all other states
   // ensure all edges are traversable from starting states. conditional edges, etc
+  if (traversabilityCheck(states, edges) === false) {
+    throw new Error("Some states are unreachable");
+  }
   // automatically calculate prep and cleanup paths to resolve effects
+  if (naiveSatisfiabilityCheck(states, edges) === false) {
+    // TODO actually say what's unsatisfiable
+    throw new Error("Some conditions are unsatisfiable");
+  }
 
   // console.log(traverseDFS(edges, states[0]!));
 };
