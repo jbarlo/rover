@@ -130,10 +130,19 @@ const traversabilityCheck = (
   return _.every(stateDict);
 };
 
+// Check if all conditional edges have some route from a starting state that satisfies their conditions
 const naiveSatisfiabilityCheck = (
   states: typeof allStates,
   edges: typeof allEdges
 ): boolean => {
+  // for every conditionally traversable edge, backprop condition until one of the following:
+  //   - a starting state is reached with a condition that passes with an empty state
+  //   - no valid conditional edges exist
+  //   - there are no edges to backprop to
+  //   - some constant number of iterations is reached
+
+  // if every conditional edge has a valid path, return true
+
   // TODO
   return true;
 };
