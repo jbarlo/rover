@@ -1,4 +1,11 @@
-import { Cond, UnwrapCond, condIsAnd, evaluateCond } from "./graph.js";
+import {
+  Cond,
+  ResourceEffects,
+  UnwrapCond,
+  condIsAnd,
+  evaluateCond,
+  mapCond,
+} from "./graph.js";
 import { states as allStates, edges as allEdges, resources } from "./state.js";
 import _ from "lodash";
 
@@ -143,6 +150,22 @@ const naiveSatisfiabilityCheck = (
     NonNullable<(typeof edges)[number]["condition"]>
   >;
 
+  const t: Record<"a" | "b", number> = { a: 1, b: 2 };
+
+  const backpropagateCondition = (
+    cond: Cond<EdgeConditionWithResource | boolean>,
+    resourceEffects:
+      | ResourceEffects<EdgeConditionWithResource["resource"]>
+      | undefined
+  ): Cond<EdgeConditionWithResource | boolean> => {
+    return mapCond(cond, (c) => {
+      if (_.isBoolean(c) || _.isNil(resourceEffects)) return c;
+      const resourceEffect: number | undefined = resourceEffects[c.resource];
+      if (_.isNil(resourceEffect)) return c;
+      return { ...c, value: c.value - resourceEffect };
+    });
+  };
+
   const verifyCond = (
     value: number,
     resource: EdgeConditionWithResource["resource"],
@@ -203,9 +226,10 @@ const naiveSatisfiabilityCheck = (
 
             // propagate the condition from backpropHorizonEdge to backEdges
             _.forEach(backEdges, (backEdge) => {
-              const backproppedCondition =
-                edgeConditionMap[backpropHorizonEdge.name];
-              // TODO modify backproppedCondition based on edge effects
+              const backproppedCondition = backpropagateCondition(
+                _.cloneDeep(edgeConditionMap[backpropHorizonEdge.name]),
+                backEdge.resourceEffects
+              );
 
               const edgeCondition = edgeConditionMap[backEdge.name];
               edgeConditionMap[backEdge.name] = _.cloneDeep({

@@ -37,6 +37,14 @@ export const evaluateCond = <T>(
   return predicate(cond);
 };
 
+export const mapCond = <T>(cond: Cond<T>, mapper: (cond: T) => T): Cond<T> => {
+  if (condIsAnd(cond))
+    return { _and: cond._and.map((subCond) => mapCond(subCond, mapper)) };
+  if (condIsOr(cond))
+    return { _or: cond._or.map((subCond) => mapCond(subCond, mapper)) };
+  return mapper(cond);
+};
+
 export type UnwrapCond<T> = T extends Cond<infer U> ? U : never;
 
 type DefinedEdgeCondition<Resource extends string> = {
@@ -49,6 +57,8 @@ type EdgeCondition<Resource extends string | null> = Resource extends string
   ? Cond<DefinedEdgeCondition<Resource>>
   : undefined;
 
+export type ResourceEffects<R extends string> = Partial<Record<R, number>>;
+
 interface BaseEdge<
   EdgeName extends string,
   ID extends string,
@@ -59,7 +69,7 @@ interface BaseEdge<
   name: EdgeName;
   // the changes made to resources through the action
   resourceEffects?: Resource extends string
-    ? Partial<Record<Resource, number>>
+    ? ResourceEffects<Resource>
     : undefined;
   condition?: EdgeCondition<Resource>;
   // TODO -- very inefficient to define reusable prep and cleanup since nav and effects

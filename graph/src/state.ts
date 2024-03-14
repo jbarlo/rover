@@ -1,26 +1,56 @@
-import { Edges, createEdges, createStates } from "./graph.js";
+import { createEdges, createStates } from "./graph.js";
 
-export const states = createStates([
-  { id: "1" },
-  { id: "1-1" },
-  { id: "1-2" },
-  { id: "1-2-1" },
-  { id: "1-2-1-1" },
-  { id: "1-2-2" },
-]);
+// TODO ensure unique IDs
+export const states = createStates([{ id: "1" }, { id: "2" }]);
 
 // TODO would be nice to generate this from types
 export const resources = ["apples" as const, "bananas" as const];
 
 export const edges = createEdges(
   [
+    {
+      from: "1",
+      to: "1",
+      name: "1-self-loop",
+      // add 1 apple
+      resourceEffects: { apples: 1 },
+      prep: () => {
+        console.log("prep 1-self-loop");
+      },
+      action: () => {
+        console.log("1-self-loop");
+      },
+      cleanup: () => {
+        console.log("cleanup 1-self-loop");
+      },
+    },
+    {
+      from: "1",
+      to: "2",
+      name: "go-to-2",
+      condition: { resource: "apples", value: 5, operator: "gt" },
+      prep: () => {
+        console.log("prep go-to-2");
+      },
+      action: () => {
+        console.log("go-to-2");
+      },
+      cleanup: () => {
+        console.log("cleanup go-to-2");
+      },
+    },
+  ],
+  states,
+  resources
+);
+
+const oldEdges = createEdges(
+  [
     { from: "1", to: "1-1", name: "go-to-1-1", action: () => {} },
     {
       from: "1-2",
       to: "1-2",
       name: "1-2-self-loop",
-      // condition: { resource: "apples", value: 5, operator: "lt" },
-      // condition: { or: [{ resource: "apples", value: 5, operator: "lt" }] },
       prep: () => {
         console.log("prep 1-2-self-loop");
       },
