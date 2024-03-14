@@ -170,74 +170,82 @@ const naiveSatisfiabilityCheck = (
   const startingStates = states.filter((s) => !_.isNil(s.url));
   const conditionalEdges = edges.filter((e) => !_.isNil(e.condition));
 
-  _.forEach(conditionalEdges, (conditionalEdge) => {
-    const edgeConditionMap: Record<
-      (typeof edges)[number]["name"],
-      Cond<EdgeConditionWithResource | boolean>
-    > = _.mapValues(nameKeyedEdges, (edge) =>
-      _.cloneDeep(edge.condition ?? true)
-    );
-
-    // for every conditionally traversable edge, backprop condition until one of the following:
-    //   - a starting state is reached with a condition that passes with an empty state (succeed)
-    //   - if all conditional edges are invalid (fail early)
-    //   - there are no edges left to backprop to (fail early)
-    //   - some constant number of iterations is reached (fail)
-
-    // backpropagation on edge A is defined as:
-    //  - if any edge B points to edge A, edge B's condition becomes its
-    //    existing condition AND edge A's condition
-
-    // initialize horizon with conditional edge
-    let backpropHorizon = [conditionalEdge];
-
-    _.forEach(_.range(iterLimit), () => {
-      // per iteration, generate next horizon
-      const newBackpropHorizon = _.uniqBy(
-        _.flatMap(backpropHorizon, (backpropHorizonEdge) => {
-          // get all edges that point to backpropHorizonEdge
-          const backEdges = conditionStrippedEdges.filter(
-            (e) => e.to === backpropHorizonEdge.from
-          );
-
-          // propagate the condition from backpropHorizonEdge to backEdges
-          _.forEach(backEdges, (backEdge) => {
-            const backproppedCondition =
-              edgeConditionMap[backpropHorizonEdge.name];
-            // TODO modify backproppedCondition based on edge effects
-
-            const edgeCondition = edgeConditionMap[backEdge.name];
-            edgeConditionMap[backEdge.name] = _.cloneDeep({
-              _and: [
-                ...(condIsAnd(edgeCondition)
-                  ? edgeCondition._and
-                  : [edgeCondition]),
-                backproppedCondition,
-              ],
-            });
-          });
-
-          return backEdges;
-        }),
-        "name"
+  try {
+    _.forEach(conditionalEdges, (conditionalEdge) => {
+      const edgeConditionMap: Record<
+        (typeof edges)[number]["name"],
+        Cond<EdgeConditionWithResource | boolean>
+      > = _.mapValues(nameKeyedEdges, (edge) =>
+        _.cloneDeep(edge.condition ?? true)
       );
 
-      // TODO filter newBackPropHorizon of any invalid conditions
+      // for every conditionally traversable edge, backprop condition until one of the following:
+      //   - a starting state is reached with a condition that passes with an empty state (succeed)
+      //   - if all conditional edges are invalid (fail early)
+      //   - there are no edges left to backprop to (fail early)
+      //   - some constant number of iterations is reached (fail)
 
-      // TODO if newBackpropHorizon is empty, fail
+      // backpropagation on edge A is defined as:
+      //  - if any edge B points to edge A, edge B's condition becomes its
+      //    existing condition AND edge A's condition
 
-      // TODO if newBackpropHorizon contains an edge off of the starting state,
-      // and the condition is valid, succeed
+      // initialize horizon with conditional edge
+      let backpropHorizon = [conditionalEdge];
 
-      // TODO set backpropHorizon to newBackpropHorizon
+      _.forEach(_.range(iterLimit), (iter) => {
+        // per iteration, generate next horizon
+        const newBackpropHorizon = _.uniqBy(
+          _.flatMap(backpropHorizon, (backpropHorizonEdge) => {
+            // get all edges that point to backpropHorizonEdge
+            const backEdges = conditionStrippedEdges.filter(
+              (e) => e.to === backpropHorizonEdge.from
+            );
+
+            // propagate the condition from backpropHorizonEdge to backEdges
+            _.forEach(backEdges, (backEdge) => {
+              const backproppedCondition =
+                edgeConditionMap[backpropHorizonEdge.name];
+              // TODO modify backproppedCondition based on edge effects
+
+              const edgeCondition = edgeConditionMap[backEdge.name];
+              edgeConditionMap[backEdge.name] = _.cloneDeep({
+                _and: [
+                  ...(condIsAnd(edgeCondition)
+                    ? edgeCondition._and
+                    : [edgeCondition]),
+                  backproppedCondition,
+                ],
+              });
+            });
+
+            return backEdges;
+          }),
+          "name"
+        );
+
+        // TODO if newBackpropHorizon contains an edge off of the starting state,
+        // and the condition is valid, succeed
+
+        // TODO filter newBackPropHorizon of any invalid conditions
+
+        // if newBackpropHorizon is empty, fail early
+        if (newBackpropHorizon.length === 0) {
+          throw new Error("No more edges to backprop conditions to");
+        }
+
+        backpropHorizon = newBackpropHorizon;
+
+        // if iterLimit is reached, fail
+        if (iter >= iterLimit - 1) {
+          throw new Error("Iteration limit reached");
+        }
+      });
     });
+  } catch {
+    return false;
+  }
 
-    // TODO if iterLimit is reached, fail
-  });
-
-  // if every conditional edge has a valid path, return true
-
-  // TODO
+  // no errors, therefore every conditional edge has a valid path
   return true;
 };
 
