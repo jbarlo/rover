@@ -85,7 +85,7 @@ export const createEdges = <
 >(
   edges: Edges<EdgeName, States, Resource extends undefined ? null : Resource>,
   states: States,
-  resources?: Resource
+  resources?: Resource[]
 ) => {
   return edges;
 };

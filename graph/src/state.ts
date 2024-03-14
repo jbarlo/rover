@@ -9,6 +9,9 @@ export const states = createStates([
   { id: "1-2-2" },
 ]);
 
+// TODO would be nice to generate this from types
+export const resources = ["apples" as const, "bananas" as const];
+
 export const edges = createEdges(
   [
     { from: "1", to: "1-1", name: "go-to-1-1", action: () => {} },
@@ -100,5 +103,5 @@ export const edges = createEdges(
     },
   ],
   states,
-  "apples"
+  resources
 );

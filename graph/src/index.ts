@@ -1,5 +1,5 @@
 import { Cond, UnwrapCond, condIsAnd, evaluateCond } from "./graph.js";
-import { states as allStates, edges as allEdges } from "./state.js";
+import { states as allStates, edges as allEdges, resources } from "./state.js";
 import _ from "lodash";
 
 const parseGraphValidity = (s: typeof allStates, e: typeof allEdges) => {
@@ -223,17 +223,32 @@ const naiveSatisfiabilityCheck = (
           "name"
         );
 
-        // TODO if newBackpropHorizon contains an edge off of the starting state,
-        // and the condition is valid, succeed
-
         // TODO filter newBackPropHorizon of any invalid conditions
 
-        // if newBackpropHorizon is empty, fail early
-        if (newBackpropHorizon.length === 0) {
-          throw new Error("No more edges to backprop conditions to");
+        // if newBackpropHorizon contains an edge off of the starting state,
+        // (and implicitly the condition is valid), succeed
+        if (
+          // FIXME inefficient
+          _.some(startingStates, (s): boolean =>
+            _.some(
+              newBackpropHorizon,
+              (e) =>
+                e.from === s.id &&
+                _.every(resources, (r) =>
+                  verifyCond(0, r, edgeConditionMap[e.name])
+                )
+            )
+          )
+        ) {
+          return false; // success, break
         }
 
         backpropHorizon = newBackpropHorizon;
+
+        // if backpropHorizon is empty, fail early
+        if (backpropHorizon.length === 0) {
+          throw new Error("No more edges to backprop conditions to");
+        }
 
         // if iterLimit is reached, fail
         if (iter >= iterLimit - 1) {
