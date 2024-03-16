@@ -4,6 +4,7 @@ import {
   UnwrapCond,
   condIsAnd,
   evaluateCond,
+  flattenCond,
   mapCond,
 } from "./graph.js";
 import { states as allStates, edges as allEdges, resources } from "./state.js";
@@ -150,8 +151,6 @@ const naiveSatisfiabilityCheck = (
     NonNullable<(typeof edges)[number]["condition"]>
   >;
 
-  const t: Record<"a" | "b", number> = { a: 1, b: 2 };
-
   const backpropagateCondition = (
     cond: Cond<EdgeConditionWithResource | boolean>,
     resourceEffects:
@@ -179,6 +178,62 @@ const naiveSatisfiabilityCheck = (
       }
       return true;
     });
+
+  const edgeConditionIsValid = (
+    cond: Cond<EdgeConditionWithResource | boolean>
+  ): boolean => {
+    const flattenedConditions: (EdgeConditionWithResource | boolean)[] =
+      flattenCond(cond);
+
+    const sets: Partial<
+      Record<EdgeConditionWithResource["resource"], Set<number>>
+    > = {};
+    const addToSet = (
+      resource: EdgeConditionWithResource["resource"],
+      value: number
+    ) => {
+      if (!sets[resource]) sets[resource] = new Set();
+      sets[resource]?.add(value);
+    };
+
+    _.forEach(flattenedConditions, (c) => {
+      if (_.isBoolean(c)) return;
+      addToSet(c.resource, c.value);
+    });
+
+    try {
+      _.forEach(sets, (set, resource) => {
+        if (_.isNil(set) || set.size <= 0) return true; // skip empty sets
+        const orderedValues = _.sortBy(Array.from(set));
+        const shiftedDownByOne = _.map(orderedValues, (v) => v - 1);
+        // appease TS with ?? 0. orderedValues always contains at least 1 value
+        const finalShiftedUpOne = (_.last(orderedValues) ?? 0) + 1;
+        const testValues = _.uniq([
+          ...orderedValues,
+          ...shiftedDownByOne,
+          finalShiftedUpOne,
+        ]);
+
+        if (
+          _.every(
+            testValues,
+            (v) =>
+              !verifyCond(
+                v,
+                resource as EdgeConditionWithResource["resource"],
+                cond
+              )
+          )
+        ) {
+          throw new Error("Invalid condition");
+        }
+      });
+    } catch {
+      return false;
+    }
+
+    return true;
+  };
 
   // `keyBy` doesn't preserve string literals since the input may not contain
   // all possible keys, but all edges are provided here.
@@ -247,15 +302,18 @@ const naiveSatisfiabilityCheck = (
           "name"
         );
 
-        // TODO filter newBackPropHorizon of any invalid conditions
+        // filter newBackPropHorizon of any invalid conditions
+        const validNewBackpropHorizon = newBackpropHorizon.filter((e) => {
+          return edgeConditionIsValid(edgeConditionMap[e.name]);
+        });
 
-        // if newBackpropHorizon contains an edge off of the starting state,
+        // if validNewBackpropHorizon contains an edge off of the starting state,
         // (and implicitly the condition is valid), succeed
         if (
           // FIXME inefficient
           _.some(startingStates, (s): boolean =>
             _.some(
-              newBackpropHorizon,
+              validNewBackpropHorizon,
               (e) =>
                 e.from === s.id &&
                 _.every(resources, (r) =>
@@ -267,7 +325,7 @@ const naiveSatisfiabilityCheck = (
           return false; // success, break
         }
 
-        backpropHorizon = newBackpropHorizon;
+        backpropHorizon = validNewBackpropHorizon;
 
         // if backpropHorizon is empty, fail early
         if (backpropHorizon.length === 0) {
@@ -293,8 +351,9 @@ const runScheduler = (
   states: typeof allStates,
   edges: typeof allEdges
 ): Step[] => {
+  console.log("Running Scheduler");
   // for now, run every edge's prep, action, and cleanup
-  return simpleScheduler(states, edges);
+  // return simpleScheduler(states, edges);
 
   // TODO new scheduler
   // determine starting states from urls
@@ -309,6 +368,8 @@ const runScheduler = (
     throw new Error("Some conditions are unsatisfiable");
   }
 
+  // TODO
+  return [];
   // console.log(traverseDFS(edges, states[0]!));
 };
 
@@ -322,11 +383,16 @@ const runSteps = (steps: Step[], edges: typeof allEdges) => {
 };
 
 async function main() {
-  parseGraphValidity(allStates, allEdges);
+  console.log("Starting");
+  try {
+    parseGraphValidity(allStates, allEdges);
 
-  const steps = runScheduler(allStates, allEdges);
+    const steps = runScheduler(allStates, allEdges);
 
-  runSteps(steps, allEdges);
+    runSteps(steps, allEdges);
+  } catch (e) {
+    console.error(e);
+  }
 }
 
 main();

@@ -45,6 +45,12 @@ export const mapCond = <T>(cond: Cond<T>, mapper: (cond: T) => T): Cond<T> => {
   return mapper(cond);
 };
 
+export const flattenCond = <T>(cond: Cond<T>): T[] => {
+  if (condIsAnd(cond)) return _.flatten(cond._and.map(flattenCond));
+  if (condIsOr(cond)) return _.flatten(cond._or.map(flattenCond));
+  return [cond];
+};
+
 export type UnwrapCond<T> = T extends Cond<infer U> ? U : never;
 
 type DefinedEdgeCondition<Resource extends string> = {
