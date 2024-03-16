@@ -253,12 +253,16 @@ const naiveSatisfiabilityCheck = (
 
   try {
     _.forEach(conditionalEdges, (conditionalEdge) => {
-      const edgeConditionMap: Record<
+      const initialEdgeConditionMap: Record<
         (typeof edges)[number]["name"],
         Cond<EdgeConditionWithResource | boolean>
       > = _.mapValues(nameKeyedEdges, (edge) =>
         _.cloneDeep(edge.condition ?? true)
       );
+      const edgeConditionMap: Record<
+        (typeof edges)[number]["name"],
+        Cond<EdgeConditionWithResource | boolean>
+      > = _.cloneDeep(initialEdgeConditionMap);
 
       // for every conditionally traversable edge, backprop condition until one of the following:
       //   - a starting state is reached with a condition that passes with an empty state (succeed)
@@ -289,12 +293,13 @@ const naiveSatisfiabilityCheck = (
                 backEdge.resourceEffects
               );
 
-              const edgeCondition = edgeConditionMap[backEdge.name];
+              const initialEdgeCondition =
+                initialEdgeConditionMap[backEdge.name];
               edgeConditionMap[backEdge.name] = _.cloneDeep({
                 _and: [
-                  ...(condIsAnd(edgeCondition)
-                    ? edgeCondition._and
-                    : [edgeCondition]),
+                  ...(condIsAnd(initialEdgeCondition)
+                    ? initialEdgeCondition._and
+                    : [initialEdgeCondition]),
                   backproppedCondition,
                 ],
               });
@@ -407,6 +412,7 @@ async function main() {
     const steps = runScheduler(allStates, allEdges);
 
     runSteps(steps, allEdges);
+    console.log("Complete!");
   } catch (e) {
     console.error(e);
   }
