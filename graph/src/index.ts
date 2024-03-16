@@ -6,6 +6,7 @@ import {
   evaluateCond,
   flattenCond,
   mapCond,
+  prettyPrintEdgeCondition,
 } from "./graph.js";
 import { states as allStates, edges as allEdges, resources } from "./state.js";
 import _ from "lodash";
@@ -228,7 +229,9 @@ const naiveSatisfiabilityCheck = (
           throw new Error("Invalid condition");
         }
       });
-    } catch {
+    } catch (e) {
+      console.log(cond);
+      console.error(e);
       return false;
     }
 
@@ -334,11 +337,25 @@ const naiveSatisfiabilityCheck = (
 
         // if iterLimit is reached, fail
         if (iter >= iterLimit - 1) {
+          console.log(
+            JSON.stringify(
+              _.mapValues(edgeConditionMap, (v) =>
+                prettyPrintEdgeCondition(v, (c) =>
+                  _.isBoolean(c)
+                    ? c.toString()
+                    : `${c.operator === "gt" ? ">" : "<"} ${c.value} ${
+                        c.resource
+                      }`
+                )
+              )
+            )
+          );
           throw new Error("Iteration limit reached");
         }
       });
     });
-  } catch {
+  } catch (e) {
+    console.error(e);
     return false;
   }
 

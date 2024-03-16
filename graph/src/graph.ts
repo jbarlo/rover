@@ -51,6 +51,21 @@ export const flattenCond = <T>(cond: Cond<T>): T[] => {
   return [cond];
 };
 
+export const prettyPrintEdgeCondition = <T>(
+  cond: Cond<T>,
+  printer: (cond: T) => string
+): string => {
+  if (condIsAnd(cond))
+    return `(${cond._and
+      .map((c) => prettyPrintEdgeCondition(c, printer))
+      .join(" && ")})`;
+  if (condIsOr(cond))
+    return `(${cond._or
+      .map((c) => prettyPrintEdgeCondition(c, printer))
+      .join(" || ")})`;
+  return printer(cond);
+};
+
 export type UnwrapCond<T> = T extends Cond<infer U> ? U : never;
 
 type DefinedEdgeCondition<Resource extends string> = {
