@@ -256,7 +256,9 @@ const naiveSatisfiabilityCheck = (
   const conditionStrippedEdges = edges.map((edge) => _.omit(edge, "condition"));
 
   const startingStates = states.filter((s) => !_.isNil(s.url));
-  const conditionalEdges = edges.filter((e) => !_.isNil(e.condition));
+  const conditionalEdges = edges
+    .filter((e) => !_.isNil(e.condition))
+    .map((edge) => _.omit(edge, "condition"));
 
   try {
     const initialEdgeConditionMap: Partial<
@@ -266,12 +268,6 @@ const naiveSatisfiabilityCheck = (
       >
     > = _.mapValues(nameKeyedEdges, (edge) => _.cloneDeep(edge.condition));
     _.forEach(conditionalEdges, (conditionalEdge) => {
-      const edgeConditionMap: Partial<
-        Record<
-          (typeof edges)[number]["name"],
-          Cond<EdgeConditionWithResource | boolean>
-        >
-      > = _.cloneDeep(initialEdgeConditionMap);
       // for every conditionally traversable edge, backprop condition until one of the following:
       //   - a starting state is reached with a condition that passes with an empty state (succeed)
       //   - if all conditional edges are invalid (fail early)
@@ -283,35 +279,39 @@ const naiveSatisfiabilityCheck = (
       //    existing condition AND edge A's condition
 
       // initialize horizon with conditional edge
-      let backpropHorizon = [conditionalEdge];
+      let backpropHorizon: {
+        edge: typeof conditionalEdge;
+        condition: Cond<EdgeConditionWithResource | boolean> | undefined;
+      }[] = [
+        {
+          edge: conditionalEdge,
+          condition: _.cloneDeep(initialEdgeConditionMap[conditionalEdge.name]),
+        },
+      ];
 
       _.forEach(_.range(iterLimit), (iter) => {
         console.log("Iteration: ", iter);
         // per iteration, generate next horizon
 
         console.log("Generating next horizon");
-        const newBackpropHorizon = _.uniqBy(
-          _.flatMap(backpropHorizon, (backpropHorizonEdge) => {
+        const newBackpropHorizon = _.flatMap(
+          backpropHorizon,
+          ({
+            edge: backpropHorizonEdge,
+            condition: backpropHorizonEdgeCondition,
+          }) => {
             console.log("Previous horizon edge: ", backpropHorizonEdge.name);
             // get all edges that point to backpropHorizonEdge
             const backEdges = conditionStrippedEdges.filter(
               (e) => e.to === backpropHorizonEdge.from
             );
 
-            // TODO filter backEdges for only those that have conditions that are met
-
             // propagate the condition from backpropHorizonEdge to backEdges
-            _.forEach(backEdges, (backEdge) => {
+            return _.map(backEdges, (backEdge) => {
               console.log("Candidate back edge: ", backEdge.name);
               const initialBackEdgeCondition = _.cloneDeep(
                 initialEdgeConditionMap[backEdge.name]
               );
-
-              // TODO bugfix - each iteration only cares about initial
-              // conditions and the backpropped condition. this implementation
-              // doesn't guarantee that this condition in unmodified
-              const backpropHorizonEdgeCondition =
-                edgeConditionMap[backpropHorizonEdge.name];
 
               const backproppedCondition = _.isNil(backpropHorizonEdgeCondition)
                 ? true
@@ -324,48 +324,35 @@ const naiveSatisfiabilityCheck = (
               // if no condition exists, use the backpropped condition
               // if a condition exists, preserve it and AND it with the backpropped condition
 
-              // TODO bugfix - multiple backEdges should not modify the same condition
-              //   - backEdge conditions represent a single path
+              const backEdgeCondition = _.isNil(initialBackEdgeCondition)
+                ? _.cloneDeep(backproppedCondition)
+                : // TODO implement cond flattening and simplification for simpler writes
+                  _.cloneDeep({
+                    _and: [
+                      ...(condIsAnd(initialBackEdgeCondition)
+                        ? initialBackEdgeCondition._and
+                        : [initialBackEdgeCondition]),
+                      backproppedCondition,
+                    ],
+                  });
 
-              if (_.isNil(initialBackEdgeCondition)) {
-                edgeConditionMap[backEdge.name] = backproppedCondition;
-              } else {
-                // TODO implement cond flattening and simplification for simpler writes
-                edgeConditionMap[backEdge.name] = _.cloneDeep({
-                  _and: [
-                    ...(condIsAnd(initialBackEdgeCondition)
-                      ? initialBackEdgeCondition._and
-                      : [initialBackEdgeCondition]),
-                    backproppedCondition,
-                  ],
-                });
-              }
+              return { edge: backEdge, condition: backEdgeCondition };
             });
-
-            return backEdges;
-          }),
-          "name"
+          }
         );
 
         // filter newBackPropHorizon of any invalid conditions
-        const validNewBackpropHorizon = newBackpropHorizon.filter((e) => {
-          const condition = edgeConditionMap[e.name];
-          return _.isNil(condition) || edgeConditionIsValid(condition);
-        });
+        const validNewBackpropHorizon = newBackpropHorizon.filter(
+          ({ condition }) =>
+            _.isNil(condition) || edgeConditionIsValid(condition)
+        );
 
         // if validNewBackpropHorizon contains an edge off of the starting state,
         // (and implicitly the condition is valid), succeed
         if (
           // FIXME inefficient
           _.some(startingStates, (s): boolean =>
-            _.some(validNewBackpropHorizon, (e) => {
-              const cond = edgeConditionMap[e.name];
-              if (iter === 0 && e.name === "1-self-loop")
-                console.log(
-                  "Checking condition: ",
-                  e.name,
-                  _.isNil(cond) ? "undefined" : prettyPrint(cond)
-                );
+            _.some(validNewBackpropHorizon, ({ edge: e, condition: cond }) => {
               return (
                 e.from === s.id &&
                 !_.isNil(cond) &&
@@ -375,14 +362,16 @@ const naiveSatisfiabilityCheck = (
           )
         ) {
           console.log("Conditional Edge Succeeded: ", conditionalEdge.name);
-          console.log(JSON.stringify(validNewBackpropHorizon));
-          console.log(
-            JSON.stringify(
-              _.mapValues(edgeConditionMap, (v) =>
-                _.isNil(v) ? "undefined" : prettyPrint(v)
-              )
-            )
-          );
+          // console.log(
+          //   JSON.stringify(
+          //     validNewBackpropHorizon.map((h) => ({
+          //       ...h,
+          //       condition: _.isNil(h.condition)
+          //         ? "undefined"
+          //         : prettyPrint(h.condition),
+          //     }))
+          //   )
+          // );
           return false; // success, break
         }
 
@@ -398,9 +387,12 @@ const naiveSatisfiabilityCheck = (
           console.log("Conditional Edge Failed: ", conditionalEdge.name);
           console.log(
             JSON.stringify(
-              _.mapValues(edgeConditionMap, (v) =>
-                _.isNil(v) ? "undefined" : prettyPrint(v)
-              )
+              validNewBackpropHorizon.map((h) => ({
+                ...h,
+                condition: _.isNil(h.condition)
+                  ? "undefined"
+                  : prettyPrint(h.condition),
+              }))
             )
           );
           throw new Error("Iteration limit reached");

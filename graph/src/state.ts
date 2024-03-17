@@ -13,7 +13,7 @@ export const edges = createEdges(
       to: "1",
       name: "1-self-loop-x2",
       resourceEffects: { apples: 2 },
-      condition: { resource: "apples", value: 5, operator: "gt" },
+      condition: { resource: "apples", value: 4, operator: "gt" },
       prep: () => {
         console.log("prep 1-self-loop");
       },
@@ -43,7 +43,7 @@ export const edges = createEdges(
       from: "1",
       to: "2",
       name: "go-to-2",
-      condition: { resource: "apples", value: 5, operator: "gt" },
+      condition: { resource: "apples", value: 14, operator: "gt" },
       prep: () => {
         console.log("prep go-to-2");
       },
