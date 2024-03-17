@@ -140,6 +140,102 @@ const traversabilityCheck = (
   return _.every(stateDict);
 };
 
+type EdgeConditionWithResource = UnwrapCond<
+  NonNullable<(typeof allEdges)[number]["condition"]>
+>;
+const prettyPrint = (condition: Cond<EdgeConditionWithResource | boolean>) =>
+  prettyPrintEdgeCondition(condition, (c) =>
+    _.isBoolean(c)
+      ? c.toString()
+      : `${c.operator === "gt" ? ">" : "<"} ${c.value} ${c.resource}`
+  );
+
+const backpropagateCondition = (
+  cond: Cond<EdgeConditionWithResource | boolean>,
+  resourceEffects:
+    | ResourceEffects<EdgeConditionWithResource["resource"]>
+    | undefined
+): Cond<EdgeConditionWithResource | boolean> => {
+  return mapCond(cond, (c) => {
+    if (_.isBoolean(c) || _.isNil(resourceEffects)) return c;
+    const resourceEffect: number | undefined = resourceEffects[c.resource];
+    if (_.isNil(resourceEffect)) return c;
+    return { ...c, value: c.value - resourceEffect };
+  });
+};
+
+const verifyCond = (
+  value: number,
+  resource: EdgeConditionWithResource["resource"],
+  cond: Cond<EdgeConditionWithResource | boolean>
+): boolean =>
+  evaluateCond(cond, (c) => {
+    if (_.isBoolean(c)) return c;
+    if (c.resource === resource) {
+      if (c.operator === "lt") return value < c.value;
+      if (c.operator === "gt") return value > c.value;
+    }
+    return true;
+  });
+
+const edgeConditionIsValid = (
+  cond: Cond<EdgeConditionWithResource | boolean>
+): boolean => {
+  const flattenedConditions: (EdgeConditionWithResource | boolean)[] =
+    flattenCond(cond);
+
+  const sets: Partial<
+    Record<EdgeConditionWithResource["resource"], Set<number>>
+  > = {};
+  const addToSet = (
+    resource: EdgeConditionWithResource["resource"],
+    value: number
+  ) => {
+    if (!sets[resource]) sets[resource] = new Set();
+    sets[resource]?.add(value);
+  };
+
+  _.forEach(flattenedConditions, (c) => {
+    if (_.isBoolean(c)) return;
+    addToSet(c.resource, c.value);
+  });
+
+  try {
+    _.forEach(sets, (set, resource) => {
+      if (_.isNil(set) || set.size <= 0) return true; // skip empty sets
+      const orderedValues = _.sortBy(Array.from(set));
+      const shiftedDownByOne = _.map(orderedValues, (v) => v - 1);
+      // appease TS with ?? 0. orderedValues always contains at least 1 value
+      const finalShiftedUpOne = (_.last(orderedValues) ?? 0) + 1;
+      const testValues = _.uniq([
+        ...orderedValues,
+        ...shiftedDownByOne,
+        finalShiftedUpOne,
+      ]);
+
+      if (
+        _.every(
+          testValues,
+          (v) =>
+            !verifyCond(
+              v,
+              resource as EdgeConditionWithResource["resource"],
+              cond
+            )
+        )
+      ) {
+        throw new Error("Invalid condition");
+      }
+    });
+  } catch (e) {
+    console.log(cond);
+    console.error(e);
+    return false;
+  }
+
+  return true;
+};
+
 const iterLimit = 10;
 
 // Check if all conditional edges have some route from a starting state that
@@ -148,103 +244,6 @@ const naiveSatisfiabilityCheck = (
   states: typeof allStates,
   edges: typeof allEdges
 ): boolean => {
-  type EdgeConditionWithResource = UnwrapCond<
-    NonNullable<(typeof edges)[number]["condition"]>
-  >;
-
-  const prettyPrint = (condition: Cond<EdgeConditionWithResource | boolean>) =>
-    prettyPrintEdgeCondition(condition, (c) =>
-      _.isBoolean(c)
-        ? c.toString()
-        : `${c.operator === "gt" ? ">" : "<"} ${c.value} ${c.resource}`
-    );
-
-  const backpropagateCondition = (
-    cond: Cond<EdgeConditionWithResource | boolean>,
-    resourceEffects:
-      | ResourceEffects<EdgeConditionWithResource["resource"]>
-      | undefined
-  ): Cond<EdgeConditionWithResource | boolean> => {
-    return mapCond(cond, (c) => {
-      if (_.isBoolean(c) || _.isNil(resourceEffects)) return c;
-      const resourceEffect: number | undefined = resourceEffects[c.resource];
-      if (_.isNil(resourceEffect)) return c;
-      return { ...c, value: c.value - resourceEffect };
-    });
-  };
-
-  const verifyCond = (
-    value: number,
-    resource: EdgeConditionWithResource["resource"],
-    cond: Cond<EdgeConditionWithResource | boolean>
-  ): boolean =>
-    evaluateCond(cond, (c) => {
-      if (_.isBoolean(c)) return c;
-      if (c.resource === resource) {
-        if (c.operator === "lt") return value < c.value;
-        if (c.operator === "gt") return value > c.value;
-      }
-      return true;
-    });
-
-  const edgeConditionIsValid = (
-    cond: Cond<EdgeConditionWithResource | boolean>
-  ): boolean => {
-    const flattenedConditions: (EdgeConditionWithResource | boolean)[] =
-      flattenCond(cond);
-
-    const sets: Partial<
-      Record<EdgeConditionWithResource["resource"], Set<number>>
-    > = {};
-    const addToSet = (
-      resource: EdgeConditionWithResource["resource"],
-      value: number
-    ) => {
-      if (!sets[resource]) sets[resource] = new Set();
-      sets[resource]?.add(value);
-    };
-
-    _.forEach(flattenedConditions, (c) => {
-      if (_.isBoolean(c)) return;
-      addToSet(c.resource, c.value);
-    });
-
-    try {
-      _.forEach(sets, (set, resource) => {
-        if (_.isNil(set) || set.size <= 0) return true; // skip empty sets
-        const orderedValues = _.sortBy(Array.from(set));
-        const shiftedDownByOne = _.map(orderedValues, (v) => v - 1);
-        // appease TS with ?? 0. orderedValues always contains at least 1 value
-        const finalShiftedUpOne = (_.last(orderedValues) ?? 0) + 1;
-        const testValues = _.uniq([
-          ...orderedValues,
-          ...shiftedDownByOne,
-          finalShiftedUpOne,
-        ]);
-
-        if (
-          _.every(
-            testValues,
-            (v) =>
-              !verifyCond(
-                v,
-                resource as EdgeConditionWithResource["resource"],
-                cond
-              )
-          )
-        ) {
-          throw new Error("Invalid condition");
-        }
-      });
-    } catch (e) {
-      console.log(cond);
-      console.error(e);
-      return false;
-    }
-
-    return true;
-  };
-
   // `keyBy` doesn't preserve string literals since the input may not contain
   // all possible keys, but all edges are provided here.
   // TODO associate this with the createEdges function
