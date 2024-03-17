@@ -45,6 +45,26 @@ export const mapCond = <T>(cond: Cond<T>, mapper: (cond: T) => T): Cond<T> => {
   return mapper(cond);
 };
 
+export const combineCond = <T>(cond: Cond<T>): Cond<T> => {
+  const helper = <T>(conds: Cond<T>[], parentType: "and" | "or"): Cond<T>[] =>
+    _.flatMap(conds, (c) => {
+      if (parentType === "and") {
+        if (condIsAnd(c)) return helper(c._and, "and");
+        if (condIsOr(c))
+          return [{ _or: _.flatMap(c._or, (cc) => helper([cc], "or")) }];
+      } else {
+        if (condIsAnd(c))
+          return [{ _and: _.flatMap(c._and, (cc) => helper([cc], "and")) }];
+        if (condIsOr(c)) return helper(c._or, "or");
+      }
+      return [_.cloneDeep(c)];
+    });
+
+  if (condIsAnd(cond)) return { _and: helper(cond._and, "and") };
+  if (condIsOr(cond)) return { _or: helper(cond._or, "or") };
+  return _.cloneDeep(cond);
+};
+
 export const flattenCond = <T>(cond: Cond<T>): T[] => {
   if (condIsAnd(cond)) return _.flatten(cond._and.map(flattenCond));
   if (condIsOr(cond)) return _.flatten(cond._or.map(flattenCond));

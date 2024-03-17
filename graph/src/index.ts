@@ -2,7 +2,7 @@ import {
   Cond,
   ResourceEffects,
   UnwrapCond,
-  condIsAnd,
+  combineCond,
   evaluateCond,
   flattenCond,
   mapCond,
@@ -293,14 +293,14 @@ const naiveSatisfiabilityCheck = (
         console.log("Iteration: ", iter);
         // per iteration, generate next horizon
 
-        console.log("Generating next horizon");
+        // console.log("Generating next horizon");
         const newBackpropHorizon = _.flatMap(
           backpropHorizon,
           ({
             edge: backpropHorizonEdge,
             condition: backpropHorizonEdgeCondition,
           }) => {
-            console.log("Previous horizon edge: ", backpropHorizonEdge.name);
+            // console.log("Previous horizon edge: ", backpropHorizonEdge.name);
             // get all edges that point to backpropHorizonEdge
             const backEdges = conditionStrippedEdges.filter(
               (e) => e.to === backpropHorizonEdge.from
@@ -308,7 +308,7 @@ const naiveSatisfiabilityCheck = (
 
             // propagate the condition from backpropHorizonEdge to backEdges
             return _.map(backEdges, (backEdge) => {
-              console.log("Candidate back edge: ", backEdge.name);
+              // console.log("Candidate back edge: ", backEdge.name);
               const initialBackEdgeCondition = _.cloneDeep(
                 initialEdgeConditionMap[backEdge.name]
               );
@@ -326,14 +326,9 @@ const naiveSatisfiabilityCheck = (
 
               const backEdgeCondition = _.isNil(initialBackEdgeCondition)
                 ? _.cloneDeep(backproppedCondition)
-                : // TODO implement cond flattening and simplification for simpler writes
-                  _.cloneDeep({
-                    _and: [
-                      ...(condIsAnd(initialBackEdgeCondition)
-                        ? initialBackEdgeCondition._and
-                        : [initialBackEdgeCondition]),
-                      backproppedCondition,
-                    ],
+                : // TODO implement simplification for fewer test values
+                  combineCond({
+                    _and: [initialBackEdgeCondition, backproppedCondition],
                   });
 
               return { edge: backEdge, condition: backEdgeCondition };
