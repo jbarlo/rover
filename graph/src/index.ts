@@ -240,10 +240,22 @@ const iterLimit = 10;
 
 // Check if all conditional edges have some route from a starting state that
 // satisfies their conditions
+type HorizonEdgeCondition =
+  | Cond<EdgeConditionWithResource | boolean>
+  | undefined;
+type Horizon = {
+  name: (typeof allEdges)[number]["name"];
+  condition: HorizonEdgeCondition;
+}[];
 const naiveSatisfiabilityCheck = (
   states: typeof allStates,
   edges: typeof allEdges
-): boolean => {
+):
+  | {
+      conditionalEdge: (typeof allEdges)[number]["name"];
+      horizons: Horizon[];
+    }[]
+  | false => {
   // `keyBy` doesn't preserve string literals since the input may not contain
   // all possible keys, but all edges are provided here.
   // TODO associate this with the createEdges function
@@ -266,7 +278,13 @@ const naiveSatisfiabilityCheck = (
         Cond<EdgeConditionWithResource | boolean>
       >
     > = _.mapValues(nameKeyedEdges, (edge) => _.cloneDeep(edge.condition));
-    _.forEach(conditionalEdges, (conditionalEdge) => {
+    const everyConditionalEdgesHorizons = _.map<
+      (typeof conditionalEdges)[number],
+      {
+        conditionalEdge: (typeof conditionalEdges)[number]["name"];
+        horizons: Horizon[];
+      }
+    >(conditionalEdges, (conditionalEdge) => {
       // for every conditionally traversable edge, backprop condition until one of the following:
       //   - a starting state is reached with a condition that passes with an empty state (succeed)
       //   - if all conditional edges are invalid (fail early)
@@ -278,14 +296,22 @@ const naiveSatisfiabilityCheck = (
       //    existing condition AND edge A's condition
 
       // initialize horizon with conditional edge
-      let backpropHorizon: {
+      type HorizonEdge = {
         edge: typeof conditionalEdge;
-        condition: Cond<EdgeConditionWithResource | boolean> | undefined;
-      }[] = [
+        condition: HorizonEdgeCondition;
+      };
+      let backpropHorizon: HorizonEdge[] = [
         {
           edge: conditionalEdge,
           condition: _.cloneDeep(initialEdgeConditionMap[conditionalEdge.name]),
         },
+      ];
+
+      const allHorizons: Horizon[] = [
+        _.map(backpropHorizon, (h) => ({
+          name: h.edge.name,
+          condition: h.condition,
+        })),
       ];
 
       _.forEach(_.range(iterLimit), (iter) => {
@@ -325,7 +351,10 @@ const naiveSatisfiabilityCheck = (
 
               const backEdgeCondition = _.isNil(initialBackEdgeCondition)
                 ? _.cloneDeep(backproppedCondition)
-                : // TODO implement simplification for fewer test values
+                : // TODO if all backpropped conditions subsumed by edge's initial
+                  // condition, consider a DP approach
+
+                  // TODO implement simplification for fewer test values
                   combineCond({
                     _and: [initialBackEdgeCondition, backproppedCondition],
                   });
@@ -343,33 +372,40 @@ const naiveSatisfiabilityCheck = (
 
         // if validNewBackpropHorizon contains an edge off of the starting state,
         // (and implicitly the condition is valid), succeed
+        const thing = ({ edge: e, condition: cond }: HorizonEdge) =>
+          _.some(
+            startingStates,
+            (s): boolean =>
+              e.from === s.id &&
+              !_.isNil(cond) &&
+              _.every(resources, (r) => verifyCond(0, r, cond))
+          );
         if (
           // FIXME inefficient
-          _.some(startingStates, (s): boolean =>
-            _.some(validNewBackpropHorizon, ({ edge: e, condition: cond }) => {
-              return (
-                e.from === s.id &&
-                !_.isNil(cond) &&
-                _.every(resources, (r) => verifyCond(0, r, cond))
-              );
-            })
-          )
+          _.some(validNewBackpropHorizon, (horizonEdge) => thing(horizonEdge))
         ) {
           console.log("Conditional Edge Succeeded: ", conditionalEdge.name);
-          // console.log(
-          //   JSON.stringify(
-          //     validNewBackpropHorizon.map((h) => ({
-          //       ...h,
-          //       condition: _.isNil(h.condition)
-          //         ? "undefined"
-          //         : prettyPrint(h.condition),
-          //     }))
-          //   )
-          // );
+
+          // record edges that are off of starting states and have valid
+          // conditions
+          allHorizons.push(
+            _.map(
+              _.filter(validNewBackpropHorizon, (horizonEdge) =>
+                thing(horizonEdge)
+              ),
+              (h) => ({ name: h.edge.name, condition: h.condition })
+            )
+          );
           return false; // success, break
         }
 
         backpropHorizon = validNewBackpropHorizon;
+        allHorizons.push(
+          _.map(validNewBackpropHorizon, (h) => ({
+            name: h.edge.name,
+            condition: h.condition,
+          }))
+        );
 
         // if backpropHorizon is empty, fail early
         if (backpropHorizon.length === 0) {
@@ -392,14 +428,16 @@ const naiveSatisfiabilityCheck = (
           throw new Error("Iteration limit reached");
         }
       });
+
+      return { conditionalEdge: conditionalEdge.name, horizons: allHorizons };
     });
+
+    // no errors, therefore every conditional edge has a valid path
+    return everyConditionalEdgesHorizons;
   } catch (e) {
     console.error(e);
     return false;
   }
-
-  // no errors, therefore every conditional edge has a valid path
-  return true;
 };
 
 // produce a list of edge action and cleanup steps that trace a path through the graph
@@ -419,10 +457,12 @@ const runScheduler = (
     throw new Error("Some states are unreachable");
   }
   // automatically calculate prep and cleanup paths to resolve effects
-  if (naiveSatisfiabilityCheck(states, edges) === false) {
+  const satisfiabilityCheckResult = naiveSatisfiabilityCheck(states, edges);
+  if (satisfiabilityCheckResult === false) {
     // TODO actually say what's unsatisfiable
     throw new Error("Some conditions are unsatisfiable");
   }
+  console.log(JSON.stringify(satisfiabilityCheckResult));
 
   // TODO
   return [];
