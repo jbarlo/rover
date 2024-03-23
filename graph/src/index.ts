@@ -3,9 +3,12 @@ import {
   Cond,
   UnwrapCond,
   combineCond,
+  condIsLeaf,
   evaluateCond,
   flattenCond,
+  flattenSoloCond,
   mapCond,
+  mapCondArr,
   prettyPrintEdgeCondition,
 } from "./cond.js";
 import { states as allStates, edges as allEdges, resources } from "./state.js";
@@ -238,11 +241,171 @@ const edgeConditionIsValid = (
 
 const iterLimit = 10;
 
-// Check if all conditional edges have some route from a starting state that
-// satisfies their conditions
 type HorizonEdgeCondition =
   | Cond<EdgeConditionWithResource | boolean>
   | undefined;
+
+// TODO test
+// TODO determine numeric ranges and reconstruct a cond
+const simplifyHorizonEdgeCond = (
+  cond: HorizonEdgeCondition
+): HorizonEdgeCondition => {
+  if (_.isNil(cond)) return undefined;
+
+  const combinedCond = combineCond(cond);
+
+  const mappedCond = {
+    _and: mapCondArr(
+      [combinedCond],
+      (conds, parentType) => {
+        if (parentType === "and") {
+          if (_.some(conds, (c) => c === false)) return [false];
+          // defines the highest and lowest valid value boundary for each
+          // resource. if a value is defined, values *beyond* that value are
+          // valid. if a resource is not defined, all values are valid.
+          const bounds: Partial<
+            Record<
+              EdgeConditionWithResource["resource"],
+              { highest: number; lowest: number }
+            >
+          > = {};
+          const setBoundary = (
+            resource: EdgeConditionWithResource["resource"],
+            type: "high" | "low",
+            value: number
+          ) => {
+            const boundary = _.cloneDeep(bounds[resource]) ?? {
+              highest: Infinity,
+              lowest: -Infinity,
+            };
+            if (type === "high") {
+              boundary.highest = Math.min(boundary.highest, value);
+            } else {
+              boundary.lowest = Math.max(boundary.lowest, value);
+            }
+            bounds[resource] = boundary;
+            return boundary;
+          };
+          try {
+            _.forEach(conds, (c) => {
+              if (_.isBoolean(c)) return true; // continue
+              if (!condIsLeaf(c)) return true; // continue
+              const newBoundary = setBoundary(
+                c.resource,
+                c.operator === "lt" ? "high" : "low",
+                c.value
+              );
+              if (newBoundary.highest <= newBoundary.lowest)
+                throw new Error("Invalid cond");
+            });
+          } catch {
+            return [false];
+          }
+
+          const newConds: typeof conds = _.compact(
+            _.flatMap(
+              bounds,
+              (
+                boundary: (typeof bounds)[keyof typeof bounds],
+                resource: keyof typeof bounds
+              ) => {
+                if (_.isNil(boundary)) return undefined;
+
+                const lowerBound =
+                  boundary.lowest > -Infinity
+                    ? { resource, value: boundary.lowest, operator: "gt" }
+                    : undefined;
+                const upperBound =
+                  boundary.highest < Infinity
+                    ? { resource, value: boundary.highest, operator: "lt" }
+                    : undefined;
+
+                return [lowerBound, upperBound];
+              }
+            )
+          );
+
+          return [..._.filter(conds, (c) => !condIsLeaf(c)), ...newConds];
+        }
+
+        if (_.some(conds, (c) => c === true)) return [true];
+        // defines the highest and lowest valid value boundary for each
+        // resource. all values *outside* of that boundary are valid. if a
+        // resource is not defined, no values are valid.
+        const bounds: Partial<
+          Record<
+            EdgeConditionWithResource["resource"],
+            { highest: number; lowest: number }
+          >
+        > = {};
+        const setBoundary = (
+          resource: EdgeConditionWithResource["resource"],
+          type: "high" | "low",
+          value: number
+        ) => {
+          const boundary = _.cloneDeep(bounds[resource]) ?? {
+            highest: Infinity,
+            lowest: -Infinity,
+          };
+          if (type === "high") {
+            boundary.highest = Math.min(boundary.highest, value);
+          } else {
+            boundary.lowest = Math.max(boundary.lowest, value);
+          }
+          bounds[resource] = boundary;
+          return boundary;
+        };
+        try {
+          _.forEach(conds, (c) => {
+            if (_.isBoolean(c)) return true; // continue
+            if (!condIsLeaf(c)) return true; // continue
+            const newBoundary = setBoundary(
+              c.resource,
+              c.operator === "lt" ? "high" : "low",
+              c.value
+            );
+            if (newBoundary.highest <= newBoundary.lowest)
+              throw new Error("Tautology found");
+          });
+        } catch {
+          return [true];
+        }
+
+        const newConds: typeof conds = _.compact(
+          _.flatMap(
+            bounds,
+            (
+              boundary: (typeof bounds)[keyof typeof bounds],
+              resource: keyof typeof bounds
+            ) => {
+              if (_.isNil(boundary)) return undefined;
+
+              const lowerBound =
+                boundary.lowest > -Infinity
+                  ? { resource, value: boundary.lowest, operator: "lt" }
+                  : undefined;
+              const upperBound =
+                boundary.highest < Infinity
+                  ? { resource, value: boundary.highest, operator: "gt" }
+                  : undefined;
+
+              return [lowerBound, upperBound];
+            }
+          )
+        );
+
+        return [..._.filter(conds, (c) => !condIsLeaf(c)), ...newConds];
+      },
+      "and",
+      true
+    ),
+  };
+
+  return flattenSoloCond(mappedCond);
+};
+
+// Check if all conditional edges have some route from a starting state that
+// satisfies their conditions
 type Horizon = {
   name: (typeof allEdges)[number]["name"];
   condition: HorizonEdgeCondition;
@@ -300,6 +463,11 @@ const naiveSatisfiabilityCheck = (
         edge: typeof conditionalEdge;
         condition: HorizonEdgeCondition;
       };
+      // TODO make prettyPrint condition order deterministic
+      const serializeHorizonEdge = (edge: HorizonEdge): string =>
+        `${edge.edge.name}:${
+          _.isNil(edge.condition) ? undefined : prettyPrint(edge.condition)
+        }`;
       let backpropHorizon: HorizonEdge[] = [
         {
           edge: conditionalEdge,
@@ -359,15 +527,21 @@ const naiveSatisfiabilityCheck = (
                     _and: [initialBackEdgeCondition, backproppedCondition],
                   });
 
-              return { edge: backEdge, condition: backEdgeCondition };
+              return {
+                edge: backEdge,
+                condition: simplifyHorizonEdgeCond(backEdgeCondition),
+              };
             });
           }
         );
 
         // filter newBackPropHorizon of any invalid conditions
-        const validNewBackpropHorizon = newBackpropHorizon.filter(
-          ({ condition }) =>
-            _.isNil(condition) || edgeConditionIsValid(condition)
+        const validNewBackpropHorizon = _.uniqBy(
+          newBackpropHorizon.filter(
+            ({ condition }) =>
+              _.isNil(condition) || edgeConditionIsValid(condition)
+          ),
+          (h) => serializeHorizonEdge(h)
         );
 
         // if validNewBackpropHorizon contains an edge off of the starting state,

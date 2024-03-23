@@ -7,6 +7,8 @@ export const condIsAnd = <T>(cond: Cond<T>): cond is AndCond<T> =>
   _.isObject(cond) && _.has(cond, "_and");
 export const condIsOr = <T>(cond: Cond<T>): cond is OrCond<T> =>
   _.isObject(cond) && _.has(cond, "_or");
+export const condIsLeaf = <T>(cond: Cond<T>): cond is T =>
+  !condIsAnd(cond) && !condIsOr(cond);
 
 export const evaluateCond = <T>(
   cond: Cond<T>,
@@ -25,6 +27,40 @@ export const mapCond = <T>(cond: Cond<T>, mapper: (cond: T) => T): Cond<T> => {
   if (condIsOr(cond))
     return { _or: cond._or.map((subCond) => mapCond(subCond, mapper)) };
   return mapper(cond);
+};
+
+export const mapCondArr = <T>(
+  conds: Cond<T>[],
+  mapper: (conds: Cond<T>[], parentType: "and" | "or") => Cond<T>[],
+  parentType: "and" | "or",
+  flattenSolo: boolean
+): Cond<T>[] => {
+  const mappedChildren = _.map(conds, (cond) => {
+    if (condIsAnd(cond)) {
+      const mapped = mapCondArr(cond._and, mapper, "and", flattenSolo);
+      if (flattenSolo && mapped.length === 1) return mapped[0]!;
+      return { _and: mapped };
+    }
+    if (condIsOr(cond)) {
+      const mapped = mapCondArr(cond._or, mapper, "or", flattenSolo);
+      if (flattenSolo && mapped.length === 1) return mapped[0]!;
+      return { _or: mapped };
+    }
+    return cond;
+  });
+  return mapper(mappedChildren, parentType);
+};
+
+export const flattenSoloCond = <T>(cond: Cond<T>): Cond<T> => {
+  if (condIsAnd(cond))
+    return cond._and.length === 1
+      ? flattenSoloCond(cond._and[0]!)
+      : { _and: _.map(cond._and, (c) => flattenSoloCond(c)) };
+  if (condIsOr(cond))
+    return cond._or.length === 1
+      ? flattenSoloCond(cond._or[0]!)
+      : { _or: _.map(cond._or, (c) => flattenSoloCond(c)) };
+  return cond;
 };
 
 export const combineCond = <T>(cond: Cond<T>): Cond<T> => {
@@ -48,8 +84,8 @@ export const combineCond = <T>(cond: Cond<T>): Cond<T> => {
 };
 
 export const flattenCond = <T>(cond: Cond<T>): T[] => {
-  if (condIsAnd(cond)) return _.flatten(cond._and.map(flattenCond));
-  if (condIsOr(cond)) return _.flatten(cond._or.map(flattenCond));
+  if (condIsAnd(cond)) return _.flatMap(cond._and, flattenCond);
+  if (condIsOr(cond)) return _.flatMap(cond._or, flattenCond);
   return [cond];
 };
 
