@@ -541,6 +541,8 @@ const naiveSatisfiabilityCheck = (
             ({ condition }) =>
               _.isNil(condition) || edgeConditionIsValid(condition)
           ),
+          // TODO does the edge name even matter? maybe yes, to calculate
+          // alternative paths
           (h) => serializeHorizonEdge(h)
         );
 
@@ -614,6 +616,44 @@ const naiveSatisfiabilityCheck = (
   }
 };
 
+const getPathFromHorizons = (
+  edges: typeof allEdges,
+  horizons: Horizon[]
+): (typeof allEdges)[number]["name"][] => {
+  const effectPack: Partial<
+    Record<EdgeConditionWithResource["resource"], number>
+  > = {};
+  const addToPack = (
+    resource: EdgeConditionWithResource["resource"],
+    value: number | undefined
+  ) => {
+    effectPack[resource] = (effectPack[resource] ?? 0) + (value ?? 0);
+  };
+
+  const reversedHorizons = _.reverse(horizons);
+
+  return _.map(reversedHorizons, (horizon) => {
+    const validEdges = _.filter(horizon, (edge) => {
+      const cond = edge.condition;
+      return (
+        _.isNil(cond) ||
+        _.every(resources, (r) => verifyCond(effectPack[r] ?? 0, r, cond))
+      );
+    });
+    // TODO track multiple valid routes?
+    const validEdge = _.first(validEdges);
+    if (_.isNil(validEdge)) throw new Error("Horizons not traversable");
+
+    _.forEach(
+      _.find(edges, (e) => e.name === validEdge.name)?.resourceEffects,
+      // TODO proper typing
+      (val, res) => addToPack(res as EdgeConditionWithResource["resource"], val)
+    );
+
+    return validEdge.name;
+  });
+};
+
 // produce a list of edge action and cleanup steps that trace a path through the graph
 const runScheduler = (
   states: typeof allStates,
@@ -636,7 +676,14 @@ const runScheduler = (
     // TODO actually say what's unsatisfiable
     throw new Error("Some conditions are unsatisfiable");
   }
-  console.log(JSON.stringify(satisfiabilityCheckResult));
+  console.log(
+    JSON.stringify(
+      _.map(satisfiabilityCheckResult, (result) => ({
+        edgeName: result.conditionalEdge,
+        path: getPathFromHorizons(edges, result.horizons),
+      }))
+    )
+  );
 
   // TODO
   return [];
