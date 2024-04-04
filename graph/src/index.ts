@@ -687,8 +687,8 @@ const getNonConditionalPaths = (
     path: ReturnType<typeof getPathFromHorizons>;
   }[]
 ) => {
-  // for every nonconditional and nonstarting edge, determine path to a starting
-  // state using conditional edges
+  // for every nonconditional edge, determine path to a starting state using
+  // conditional edges
   const startingStates = getStartingStates(states);
   const nonConditionalEdges = edges.filter((e) => _.isNil(e.condition));
 
