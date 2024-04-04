@@ -285,16 +285,13 @@ const naiveSatisfiabilityCheck = (
 };
 
 const getPathFromHorizonEdgeNames = (
-  horizons: (typeof allEdges)[number]["name"][][],
-  horizonFilter: (horizon: (typeof allEdges)[number]["name"]) => boolean = () =>
-    true
+  horizons: (typeof allEdges)[number]["name"][][]
 ): (typeof allEdges)[number]["name"][] => {
   const reversedHorizons = _.reverse(_.cloneDeep(horizons));
 
   return _.map(reversedHorizons, (horizon) => {
-    const validEdges = _.filter(horizon, (edge) => horizonFilter(edge));
     // TODO track multiple valid routes?
-    const validEdge = _.first(validEdges);
+    const validEdge = _.first(horizon);
     if (_.isNil(validEdge)) throw new Error("Horizons not traversable");
 
     return validEdge;
