@@ -1,7 +1,11 @@
 import { createEdges, createStates } from "./graph.js";
 
 // TODO ensure unique IDs
-export const states = createStates([{ id: "1", url: "start" }, { id: "2" }]);
+export const states = createStates([
+  { id: "1", url: "start" },
+  { id: "2" },
+  { id: "3" },
+]);
 
 // TODO would be nice to generate this from types
 export const resources = ["apples" as const, "bananas" as const];
@@ -52,6 +56,22 @@ export const edges = createEdges(
       },
       cleanup: () => {
         console.log("cleanup go-to-2");
+      },
+    },
+    {
+      from: "1",
+      to: "3",
+      name: "go-to-3-from-1",
+      action: () => {
+        console.log("go-to-3-from-1");
+      },
+    },
+    {
+      from: "2",
+      to: "3",
+      name: "go-to-3-from-2",
+      action: () => {
+        console.log("go-to-3-from-2");
       },
     },
   ],

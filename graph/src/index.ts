@@ -22,6 +22,9 @@ const parseGraphValidity = (s: typeof allStates, e: typeof allEdges) => {
   if (e.length !== _.uniqBy(e, "name").length) {
     throw new Error("Duplicate edge names");
   }
+
+  // TODO check non-start states don't have conflicting implied URLs
+  // should URLs and startingness be separate? maybe URLs as groups?x
 };
 
 const findAssociatedEdges = (
@@ -105,12 +108,15 @@ const simpleScheduler = (
     { edgeName: edge.name, type: "cleanup" },
   ]);
 
+const getStartingStates = (states: typeof allStates) =>
+  states.filter((s) => !_.isNil(s.url));
+
 // Check if all states are reachable from starting states
 const traversabilityCheck = (
   states: typeof allStates,
   edges: typeof allEdges
 ) => {
-  const startingStates = states.filter((s) => !_.isNil(s.url));
+  const startingStates = getStartingStates(states);
   if (startingStates.length === 0) return false;
 
   const stateDict = {
@@ -429,7 +435,7 @@ const naiveSatisfiabilityCheck = (
 
   const conditionStrippedEdges = edges.map((edge) => _.omit(edge, "condition"));
 
-  const startingStates = states.filter((s) => !_.isNil(s.url));
+  const startingStates = getStartingStates(states);
   const conditionalEdges = edges
     .filter((e) => !_.isNil(e.condition))
     .map((edge) => _.omit(edge, "condition"));
@@ -616,6 +622,24 @@ const naiveSatisfiabilityCheck = (
   }
 };
 
+const getPathFromHorizonEdgeNames = (
+  edges: typeof allEdges,
+  horizons: (typeof allEdges)[number]["name"][][],
+  horizonFilter: (horizon: (typeof allEdges)[number]["name"]) => boolean = () =>
+    true
+): (typeof allEdges)[number]["name"][] => {
+  const reversedHorizons = _.reverse(_.cloneDeep(horizons));
+
+  return _.map(reversedHorizons, (horizon) => {
+    const validEdges = _.filter(horizon, (edge) => horizonFilter(edge));
+    // TODO track multiple valid routes?
+    const validEdge = _.first(validEdges);
+    if (_.isNil(validEdge)) throw new Error("Horizons not traversable");
+
+    return validEdge;
+  });
+};
+
 const getPathFromHorizons = (
   edges: typeof allEdges,
   horizons: Horizon[]
@@ -630,7 +654,7 @@ const getPathFromHorizons = (
     effectPack[resource] = (effectPack[resource] ?? 0) + (value ?? 0);
   };
 
-  const reversedHorizons = _.reverse(horizons);
+  const reversedHorizons = _.reverse(_.cloneDeep(horizons));
 
   return _.map(reversedHorizons, (horizon) => {
     const validEdges = _.filter(horizon, (edge) => {
@@ -652,6 +676,168 @@ const getPathFromHorizons = (
 
     return validEdge.name;
   });
+};
+
+const NONCONDITIONAL_PATH_LIMIT = 10;
+
+const getNonConditionalPaths = (
+  states: typeof allStates,
+  edges: typeof allEdges,
+  conditionalEdgePaths: {
+    edgeName: (typeof allEdges)[number]["name"];
+    path: ReturnType<typeof getPathFromHorizons>;
+  }[]
+) => {
+  // for every nonconditional and nonstarting edge, determine path to a starting
+  // state using conditional edges
+  const startingStates = getStartingStates(states);
+  const nonConditionalEdges = edges.filter((e) => _.isNil(e.condition));
+
+  const nameKeyedEdges = _.keyBy(edges, "name");
+
+  const conditionalEdgePathsWithEdgeData = _.compact(
+    conditionalEdgePaths.map((e) => {
+      const edge = nameKeyedEdges[e.edgeName];
+      if (_.isNil(edge)) return undefined;
+      return { edge, path: e.path };
+    })
+  );
+
+  const nameKeyedConditionalEdgePaths = _.keyBy(
+    conditionalEdgePathsWithEdgeData,
+    (e) => e.edge.name
+  );
+
+  const nonConditionalEdgePaths = _.map(
+    nonConditionalEdges,
+    (nonConditionalEdge) => {
+      // if nonconditional edge starts at a starting state, return it
+      if (_.some(startingStates, (s) => s.id === nonConditionalEdge.from)) {
+        return {
+          edge: nonConditionalEdge.name,
+          path: [nonConditionalEdge.name],
+        };
+      }
+
+      const conditionalEdgeFound: Partial<
+        Record<
+          (typeof conditionalEdgePathsWithEdgeData)[number]["edge"]["name"],
+          { pathToNonConditional: ReturnType<typeof getPathFromHorizons> }
+        >
+      > = {};
+
+      let horizons = [[nonConditionalEdge.name]];
+
+      // BFS for NONCONDITIONAL_PATH_LIMIT iterations or break if no more edges to
+      // traverse or starting state reached.
+      try {
+        _.forEach(_.range(NONCONDITIONAL_PATH_LIMIT), (iter) => {
+          const newHorizon = _.uniq(
+            _.flatMap(horizons[iter], (edgeName) => {
+              const edge = nameKeyedEdges[edgeName];
+              if (_.isNil(edge)) return [];
+              const nextEdges = edges.filter((e) => e.to === edge.from);
+              return nextEdges.map((e) => e.name);
+            })
+          );
+
+          horizons.push(newHorizon);
+
+          if (_.isEmpty(newHorizon)) {
+            throw new Error("No more edges to traverse");
+          }
+
+          // if horizon contains a conditional edge, store its path
+          const horizonEdgeMatrix = _.flatMap(newHorizon, (edgeName) => {
+            const horizonEdge = nameKeyedEdges[edgeName];
+            if (_.isNil(horizonEdge)) return [];
+            return _.map(conditionalEdgePathsWithEdgeData, (e) => ({
+              horizonEdge,
+              conditionalEdge: e,
+            }));
+          });
+          const matchingConditionalEdge = _.find(
+            horizonEdgeMatrix,
+            (horizonEdgePair) =>
+              horizonEdgePair.horizonEdge.name ===
+              horizonEdgePair.conditionalEdge.edge.name
+          );
+          if (
+            !_.isNil(matchingConditionalEdge) &&
+            _.isNil(
+              conditionalEdgeFound[
+                matchingConditionalEdge.conditionalEdge.edge.name
+              ]
+            )
+          ) {
+            conditionalEdgeFound[
+              matchingConditionalEdge.conditionalEdge.edge.name
+            ] = {
+              // lop off the head. the coonditional path includes its own edge
+              pathToNonConditional: _.tail(
+                getPathFromHorizonEdgeNames(edges, horizons)
+              ),
+            };
+          }
+
+          if (
+            _.some(newHorizon, (edgeName) => {
+              const edge = nameKeyedEdges[edgeName];
+              if (_.isNil(edge)) return false;
+              return _.some(startingStates, (s) => s.id === edge.from);
+            })
+          )
+            return false; // break if a starting state is reached
+        });
+      } catch {
+        // no more edges to traverse
+
+        // no conditional edge found and no starting state reached
+        if (_.filter(conditionalEdgeFound, (v) => !_.isNil(v)).length <= 0) {
+          throw new Error(
+            "No conditional edge found and no starting state reached"
+          );
+        }
+      }
+
+      // conditional edge found, use the shortest total path
+      if (_.filter(conditionalEdgeFound, (v) => !_.isNil(v)).length > 0) {
+        const shortestConditionalEdgePath = _.minBy(
+          _.compact(
+            _.map(conditionalEdgeFound, (val, edgeName) =>
+              _.isNil(val)
+                ? undefined
+                : {
+                    edgeName: edgeName as keyof typeof conditionalEdgeFound,
+                    pathToNonConditional: val.pathToNonConditional,
+                  }
+            )
+          ),
+          (v) =>
+            (nameKeyedConditionalEdgePaths[v.edgeName]?.path.length ?? 0) +
+            v.pathToNonConditional.length
+        );
+        if (_.isNil(shortestConditionalEdgePath)) return null;
+        const conditionalEdgePath =
+          nameKeyedConditionalEdgePaths[shortestConditionalEdgePath.edgeName];
+        if (_.isNil(conditionalEdgePath)) return null;
+        return {
+          edge: nonConditionalEdge.name,
+          path: [
+            ...conditionalEdgePath.path,
+            ...shortestConditionalEdgePath.pathToNonConditional,
+          ],
+        };
+      }
+
+      return {
+        edge: nonConditionalEdge.name,
+        path: getPathFromHorizonEdgeNames(edges, horizons),
+      };
+    }
+  );
+
+  return _.compact(nonConditionalEdgePaths);
 };
 
 // produce a list of edge action and cleanup steps that trace a path through the graph
@@ -676,14 +862,20 @@ const runScheduler = (
     // TODO actually say what's unsatisfiable
     throw new Error("Some conditions are unsatisfiable");
   }
-  console.log(
-    JSON.stringify(
-      _.map(satisfiabilityCheckResult, (result) => ({
-        edgeName: result.conditionalEdge,
-        path: getPathFromHorizons(edges, result.horizons),
-      }))
-    )
+  const conditionalPaths = _.map(satisfiabilityCheckResult, (result) => ({
+    edgeName: result.conditionalEdge,
+    path: getPathFromHorizons(edges, result.horizons),
+  }));
+
+  console.log(JSON.stringify(conditionalPaths));
+
+  console.log("Calculating non-conditional paths");
+  const nonConditionalPaths = getNonConditionalPaths(
+    states,
+    edges,
+    conditionalPaths
   );
+  console.log(JSON.stringify(nonConditionalPaths));
 
   // TODO
   return [];
