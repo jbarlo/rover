@@ -623,7 +623,6 @@ const naiveSatisfiabilityCheck = (
 };
 
 const getPathFromHorizonEdgeNames = (
-  edges: typeof allEdges,
   horizons: (typeof allEdges)[number]["name"][][],
   horizonFilter: (horizon: (typeof allEdges)[number]["name"]) => boolean = () =>
     true
@@ -775,7 +774,7 @@ const getNonConditionalPaths = (
             ] = {
               // lop off the head. the coonditional path includes its own edge
               pathToNonConditional: _.tail(
-                getPathFromHorizonEdgeNames(edges, horizons)
+                getPathFromHorizonEdgeNames(horizons)
               ),
             };
           }
@@ -832,7 +831,7 @@ const getNonConditionalPaths = (
 
       return {
         edge: nonConditionalEdge.name,
-        path: getPathFromHorizonEdgeNames(edges, horizons),
+        path: getPathFromHorizonEdgeNames(horizons),
       };
     }
   );
