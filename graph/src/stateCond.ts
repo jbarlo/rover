@@ -26,6 +26,20 @@ export const prettyPrint = (
       : `${c.operator === "gt" ? ">" : "<"} ${c.value} ${c.resource}`
   );
 
+export const propagateCondition = (
+  cond: Cond<EdgeConditionWithResource | boolean>,
+  resourceEffects:
+    | ResourceEffects<EdgeConditionWithResource["resource"]>
+    | undefined
+): Cond<EdgeConditionWithResource | boolean> => {
+  return mapCond(cond, (c) => {
+    if (_.isBoolean(c) || _.isNil(resourceEffects)) return c;
+    const resourceEffect: number | undefined = resourceEffects[c.resource];
+    if (_.isNil(resourceEffect)) return c;
+    return { ...c, value: c.value + resourceEffect };
+  });
+};
+
 export const backpropagateCondition = (
   cond: Cond<EdgeConditionWithResource | boolean>,
   resourceEffects:
@@ -104,8 +118,6 @@ export const edgeConditionIsValid = (
       }
     });
   } catch (e) {
-    console.log(cond);
-    console.error(e);
     return false;
   }
 

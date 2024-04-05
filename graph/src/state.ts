@@ -74,6 +74,15 @@ export const edges = createEdges(
         console.log("go-to-3-from-2");
       },
     },
+    {
+      from: "3",
+      to: "1",
+      name: "go-to-1-from-3",
+      resourceEffects: { apples: -5 },
+      action: () => {
+        console.log("go-to-1-from-3");
+      },
+    },
   ],
   states,
   resources
