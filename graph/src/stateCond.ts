@@ -68,7 +68,7 @@ export const verifyCond = (
     return true;
   });
 
-export const edgeConditionIsValid = (
+export const edgeConditionIsSatisfiable = (
   cond: Cond<EdgeConditionWithResource | boolean>
 ): boolean => {
   const flattenedConditions: (EdgeConditionWithResource | boolean)[] =

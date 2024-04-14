@@ -5,7 +5,7 @@ import {
   EdgeConditionWithResource,
   HorizonEdgeCondition,
   backpropagateCondition,
-  edgeConditionIsValid,
+  edgeConditionIsSatisfiable,
   prettyPrint,
   propagateCondition,
   simplifyHorizonEdgeCond,
@@ -237,7 +237,7 @@ const naiveSatisfiabilityCheck = (
           const validNewBackpropHorizon = _.uniqBy(
             newBackpropHorizon.filter(
               ({ condition }) =>
-                _.isNil(condition) || edgeConditionIsValid(condition)
+                _.isNil(condition) || edgeConditionIsSatisfiable(condition)
             ),
             // TODO does the edge name even matter? maybe yes, to calculate
             // alternative paths
@@ -623,10 +623,12 @@ const cleanupCheck = (
           const edge = nameKeyedEdges[edgeName];
           if (_.isNil(edge)) return [];
 
-          // get all edges that point to backpropHorizonEdge
+          // get all edges that point from backpropHorizonEdge
           const horizonEdges = conditionStrippedEdges.filter(
-            (e) => e.to === edge.from
+            (e) => e.from === edge.to
           );
+
+          // console.log(horizonEdges.map((h) => h.name));
 
           // propagate the condition from backpropHorizonEdge to horizonEdges
           return _.map(horizonEdges, (horizonEdge) => {
@@ -637,6 +639,12 @@ const cleanupCheck = (
             const proppedCondition = _.isNil(condition)
               ? true
               : propagateCondition(condition, horizonEdge.resourceEffects);
+            // console.log(
+            //   horizonEdge.name,
+            //   JSON.stringify(horizonEdge.resourceEffects),
+            //   JSON.stringify(condition),
+            //   JSON.stringify(proppedCondition)
+            // );
 
             // for every horizonEdge,
             // if no condition exists, use the propped condition
@@ -655,6 +663,7 @@ const cleanupCheck = (
             return {
               edge: horizonEdge.name,
               condition: simplifyHorizonEdgeCond(nextEdgeCondition),
+              // unsimplifiedCond: nextEdgeCondition,
             };
           });
         });
@@ -663,25 +672,27 @@ const cleanupCheck = (
         const validNewHorizon = _.uniqBy(
           newHorizon.filter(
             ({ condition }) =>
-              _.isNil(condition) || edgeConditionIsValid(condition)
+              // !!TODO!! filter out edges where pack value doesn't match?
+              // covered already by constraints?
+              _.isNil(condition) ||
+              (_.isBoolean(condition) && condition) ||
+              (!_.isBoolean(condition) && edgeConditionIsSatisfiable(condition))
           ),
           // TODO does the edge name even matter? maybe yes, to calculate
           // alternative paths
           (h) => serializeHorizonEdge(h)
         );
 
-        // if validNewHorizon contains an edge off of the starting state,
-        // (and implicitly the condition is valid), succeed
-        const thing = ({ edge: e, condition: cond }: HorizonEdge) =>
-          _.some(states, (s): boolean => {
-            const edge = nameKeyedEdges[e];
-            return (
-              !_.isNil(edge) &&
-              edge.to === s.id &&
-              !_.isNil(cond) &&
-              _.every(resources, (r) => verifyCond(0, r, cond))
-            );
-          });
+        // console.log("PREV");
+        // console.log(JSON.stringify(prev));
+        // console.log("NEW HORIZON");
+        // console.log(JSON.stringify(newHorizon));
+        console.log("VALID NEW HORIZON");
+        console.log(JSON.stringify(validNewHorizon));
+
+        // if validNewHorizon contains a 0-pack, succeed
+        const thing = ({ condition: cond }: HorizonEdge) =>
+          !_.isNil(cond) && _.every(resources, (r) => verifyCond(0, r, cond));
         if (
           // FIXME inefficient
           _.some(validNewHorizon, (horizonEdge) => thing(horizonEdge))
@@ -718,7 +729,12 @@ const cleanupCheck = (
         return true;
       }
     );
+    // TODO should backpropped version of this function get filtered too?
     return getPathFromHorizonEdgeNames(
+      // !!TODO!! getPathFromHorizonEdgeNames assumes no conds and therefore
+      //  that all paths from any horizon element to another is valid.
+      //  swap/modify alg that filters out impossible paths.
+      // maybe getPathFromHorizons? or maybe they can all be combined
       _.map(allHorizons, (horizon) => horizon.map((h) => h.edge))
     );
   } catch {
@@ -766,6 +782,7 @@ const runScheduler = (
     )
   );
 
+  // !!TODO!! add all implicit state -> starting state edges
   // TODO actually get valid results
   // TODO calculate for all paths
   _.forEach(nonConditionalPaths, (path, i) => {
