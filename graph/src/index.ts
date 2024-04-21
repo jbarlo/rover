@@ -313,13 +313,17 @@ const naiveSatisfiabilityCheck = (
 };
 
 const getPathFromHorizonEdgeNames = (
-  horizons: (typeof allEdges)[number]["name"][][]
+  horizons: (typeof allEdges)[number]["name"][][],
+  horizonEdgeFilter: (
+    horizon: (typeof allEdges)[number]["name"]
+  ) => boolean = () => true
 ): (typeof allEdges)[number]["name"][] => {
   const reversedHorizons = _.reverse(_.cloneDeep(horizons));
 
   return _.map(reversedHorizons, (horizon) => {
+    const filteredHorizon = horizon.filter(horizonEdgeFilter);
     // TODO track multiple valid routes?
-    const validEdge = _.first(horizon);
+    const validEdge = _.first(filteredHorizon);
     if (_.isNil(validEdge)) throw new Error("Horizons not traversable");
 
     return validEdge;
@@ -351,6 +355,77 @@ const getPathFromHorizons = (
       );
     });
     // TODO track multiple valid routes?
+    const validEdge = _.first(validEdges);
+    if (_.isNil(validEdge)) throw new Error("Horizons not traversable");
+
+    _.forEach(
+      _.find(edges, (e) => e.name === validEdge.name)?.resourceEffects,
+      // TODO proper typing
+      (val, res) => addToPack(res as EdgeConditionWithResource["resource"], val)
+    );
+
+    return validEdge.name;
+  });
+};
+
+const getCleanupPathFromHorizons = (
+  edges: typeof allEdges,
+  horizons: Horizon[]
+  // initialPack?: Partial<Record<EdgeConditionWithResource["resource"], number>>
+): (typeof allEdges)[number]["name"][] => {
+  const effectPack: Partial<
+    Record<EdgeConditionWithResource["resource"], number>
+  > = {};
+  const checkPackResult = (
+    resource: EdgeConditionWithResource["resource"],
+    value: number | undefined
+  ) => (effectPack[resource] ?? 0) - (value ?? 0);
+  const peekNextPack = (
+    currPack: Partial<Record<EdgeConditionWithResource["resource"], number>>,
+    resourceEffects: NonNullable<(typeof edges)[number]["resourceEffects"]>
+  ) => {
+    const clonedPack = _.cloneDeep(currPack);
+    _.forEach(
+      resourceEffects,
+      // TODO proper typing
+      (val, res) => {
+        const resource = res as EdgeConditionWithResource["resource"];
+        clonedPack[resource] = checkPackResult(resource, val);
+      }
+    );
+    return clonedPack;
+  };
+  const addToPack = (
+    resource: EdgeConditionWithResource["resource"],
+    value: number | undefined
+  ) => {
+    effectPack[resource] = checkPackResult(resource, value);
+  };
+
+  const reversedHorizons = _.reverse(_.cloneDeep(horizons));
+
+  return _.map(reversedHorizons, (horizon) => {
+    // console.log("EFFECT PACK");
+    // console.log(JSON.stringify(effectPack));
+    // console.log("EDGES");
+    // console.log(horizon);
+
+    const validEdges = _.filter(horizon, (edge) => {
+      const cond = edge.condition;
+      if (_.isNil(cond)) return true;
+
+      // const peekedPack = peekNextPack(
+      //   effectPack,
+      //   _.find(edges, (e) => e.name === edge.name)?.resourceEffects ?? {}
+      // );
+      // console.log("PEEKED PACK:", edge.name);
+      // console.log(JSON.stringify(peekedPack));
+
+      return _.every(resources, (r) => verifyCond(effectPack[r] ?? 0, r, cond));
+    });
+    // TODO track multiple valid routes?
+    // console.log("VALID EDGES");
+    // console.log(validEdges);
     const validEdge = _.first(validEdges);
     if (_.isNil(validEdge)) throw new Error("Horizons not traversable");
 
@@ -425,8 +500,8 @@ const getNonConditionalPaths = (
               _.flatMap(prev, (edgeName) => {
                 const edge = nameKeyedEdges[edgeName];
                 if (_.isNil(edge)) return [];
-                const nextEdges = edges.filter((e) => e.to === edge.from);
-                return nextEdges.map((e) => e.name);
+                const backEdges = edges.filter((e) => e.to === edge.from);
+                return backEdges.map((e) => e.name);
               })
             ),
           }),
@@ -459,6 +534,7 @@ const getNonConditionalPaths = (
               ] = {
                 // lop off the head. the conditional path includes its own edge
                 pathToNonConditional: _.tail(
+                  // TODO confirm no filtering is needed here
                   getPathFromHorizonEdgeNames(horizons)
                 ),
               };
@@ -606,13 +682,18 @@ const cleanupCheck = (
 
   // TODO make prettyPrint condition order deterministic
   const serializeHorizonEdge = (edge: HorizonEdge): string =>
-    `${edge}:${
+    `${edge.edge}:${
       _.isNil(edge.condition) ? undefined : prettyPrint(edge.condition)
     }`;
 
   const initialBackpropHorizon: HorizonEdge[] = [
     { edge: edgeToClean, condition: packToCondition(pack) },
   ];
+
+  const conditionIsValid = (condition: HorizonEdgeCondition) =>
+    _.isNil(condition) ||
+    (_.isBoolean(condition) && condition) ||
+    (!_.isBoolean(condition) && edgeConditionIsSatisfiable(condition));
 
   try {
     const allHorizons = bfs<HorizonEdge>(
@@ -631,28 +712,38 @@ const cleanupCheck = (
           // console.log(horizonEdges.map((h) => h.name));
 
           // propagate the condition from backpropHorizonEdge to horizonEdges
-          return _.map(horizonEdges, (horizonEdge) => {
-            const initialHorizonEdgeCondition = _.cloneDeep(
-              initialEdgeConditionMap[horizonEdge.name]
-            );
+          return _.compact(
+            _.map(horizonEdges, (horizonEdge) => {
+              const initialHorizonEdgeCondition =
+                _.cloneDeep(initialEdgeConditionMap[horizonEdge.name]) ?? true;
 
-            const proppedCondition = _.isNil(condition)
-              ? true
-              : propagateCondition(condition, horizonEdge.resourceEffects);
-            // console.log(
-            //   horizonEdge.name,
-            //   JSON.stringify(horizonEdge.resourceEffects),
-            //   JSON.stringify(condition),
-            //   JSON.stringify(proppedCondition)
-            // );
+              if (
+                !conditionIsValid(
+                  simplifyHorizonEdgeCond(
+                    combineCond({
+                      _and: [initialHorizonEdgeCondition, condition ?? true],
+                    })
+                  )
+                )
+              ) {
+                return null;
+              }
+              const proppedCondition = _.isNil(condition)
+                ? true
+                : propagateCondition(condition, horizonEdge.resourceEffects);
+              // console.log(
+              // horizonEdge.name,
+              // JSON.stringify(horizonEdge.resourceEffects),
+              // JSON.stringify(condition),
+              // JSON.stringify(proppedCondition)
+              // );
 
-            // for every horizonEdge,
-            // if no condition exists, use the propped condition
-            // if a condition exists, preserve it and AND it with the propped condition
+              // for every horizonEdge,
+              // if no condition exists, use the propped condition
+              // if a condition exists, preserve it and AND it with the propped condition
 
-            const nextEdgeCondition = _.isNil(initialHorizonEdgeCondition)
-              ? _.cloneDeep(proppedCondition)
-              : // TODO if all propped conditions subsumed by edge's initial
+              const nextEdgeCondition =
+                // TODO if all propped conditions subsumed by edge's initial
                 // condition, consider a DP approach
 
                 // TODO implement simplification for fewer test values
@@ -660,24 +751,23 @@ const cleanupCheck = (
                   _and: [initialHorizonEdgeCondition, proppedCondition],
                 });
 
-            return {
-              edge: horizonEdge.name,
-              condition: simplifyHorizonEdgeCond(nextEdgeCondition),
-              // unsimplifiedCond: nextEdgeCondition,
-            };
-          });
+              return {
+                edge: horizonEdge.name,
+                condition: simplifyHorizonEdgeCond(nextEdgeCondition),
+                unsimplifiedCond: nextEdgeCondition,
+              };
+            })
+          );
         });
 
         // filter newHorizon of any invalid conditions
         const validNewHorizon = _.uniqBy(
-          newHorizon.filter(
-            ({ condition }) =>
-              // !!TODO!! filter out edges where pack value doesn't match?
-              // covered already by constraints?
-              _.isNil(condition) ||
-              (_.isBoolean(condition) && condition) ||
-              (!_.isBoolean(condition) && edgeConditionIsSatisfiable(condition))
-          ),
+          newHorizon,
+          // newHorizon.filter(({ condition }) =>
+          // !!TODO!! filter out edges where pack value doesn't match?
+          // covered already by constraints?
+          // conditionIsValid(condition)
+          // ),
           // TODO does the edge name even matter? maybe yes, to calculate
           // alternative paths
           (h) => serializeHorizonEdge(h)
@@ -687,8 +777,16 @@ const cleanupCheck = (
         // console.log(JSON.stringify(prev));
         // console.log("NEW HORIZON");
         // console.log(JSON.stringify(newHorizon));
-        console.log("VALID NEW HORIZON");
-        console.log(JSON.stringify(validNewHorizon));
+        // console.log("MAPPED NEW");
+        // console.log(
+        //   JSON.stringify(_.map(newHorizon, (h) => serializeHorizonEdge(h)))
+        // );
+        // console.log("VALID NEW HORIZON");
+        // console.log(JSON.stringify(validNewHorizon));
+        // console.log("MAPPED VALID NEW");
+        // console.log(
+        //   JSON.stringify(_.map(validNewHorizon, (h) => serializeHorizonEdge(h)))
+        // );
 
         // if validNewHorizon contains a 0-pack, succeed
         const thing = ({ condition: cond }: HorizonEdge) =>
@@ -729,15 +827,36 @@ const cleanupCheck = (
         return true;
       }
     );
-    // TODO should backpropped version of this function get filtered too?
-    return getPathFromHorizonEdgeNames(
-      // !!TODO!! getPathFromHorizonEdgeNames assumes no conds and therefore
-      //  that all paths from any horizon element to another is valid.
-      //  swap/modify alg that filters out impossible paths.
-      // maybe getPathFromHorizons? or maybe they can all be combined
-      _.map(allHorizons, (horizon) => horizon.map((h) => h.edge))
+
+    console.log(
+      JSON.stringify(
+        _.map(allHorizons, (horizon) => horizon.map((h) => h.edge))
+      )
     );
-  } catch {
+
+    // TODO should backpropped version of this function get filtered too?
+    return _.reverse(
+      getCleanupPathFromHorizons(
+        // !!TODO!! getPathFromHorizonEdgeNames assumes no conds and therefore
+        //  that all paths from any horizon element to another is valid.
+        //  swap/modify alg that filters out impossible paths.
+        // maybe getPathFromHorizons? or maybe they can all be combined
+        edges,
+        _.tail(allHorizons).map((horizon) =>
+          horizon.map((edge) => ({
+            name: edge.edge,
+            condition: edge.condition,
+          }))
+        )
+        // (edgeName) => {
+        //   const edge = nameKeyedEdges[edgeName];
+        //   if (_.isNil(edge)) return false;
+        //   return conditionIsValid(edge.condition);
+        // }
+      )
+    );
+  } catch (e) {
+    console.log(e);
     return false;
   }
 };
