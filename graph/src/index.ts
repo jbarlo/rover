@@ -1,5 +1,9 @@
 import { Cond, combineCond } from "./cond.js";
-import { states as allStates, edges as allEdges, resources } from "./state.js";
+import {
+  states as allStates,
+  edges as allEdges,
+  resources as allResources,
+} from "./state.js";
 import _ from "lodash";
 import {
   EdgeConditionWithResource,
@@ -252,7 +256,7 @@ const naiveSatisfiabilityCheck = (
               (s): boolean =>
                 e.from === s.id &&
                 !_.isNil(cond) &&
-                _.every(resources, (r) => verifyCond(0, r, cond))
+                _.every(allResources, (r) => verifyCond(0, r, cond))
             );
           if (
             // FIXME inefficient
@@ -351,7 +355,7 @@ const getPathFromHorizons = (
       const cond = edge.condition;
       return (
         _.isNil(cond) ||
-        _.every(resources, (r) => verifyCond(effectPack[r] ?? 0, r, cond))
+        _.every(allResources, (r) => verifyCond(effectPack[r] ?? 0, r, cond))
       );
     });
     // TODO track multiple valid routes?
@@ -390,7 +394,9 @@ const getCleanupPathFromHorizons = (
       const cond = edge.condition;
       if (_.isNil(cond)) return true;
 
-      return _.every(resources, (r) => verifyCond(effectPack[r] ?? 0, r, cond));
+      return _.every(allResources, (r) =>
+        verifyCond(effectPack[r] ?? 0, r, cond)
+      );
     });
     // TODO track multiple valid routes?
     const validEdge = _.first(validEdges);
@@ -575,7 +581,7 @@ const getPackFromPath = (
   path: (typeof allEdges)[number]["name"][],
   edges: typeof allEdges,
   initialPack?: Partial<Record<EdgeConditionWithResource["resource"], number>>
-): Partial<Record<EdgeConditionWithResource["resource"], number>> => {
+): Record<EdgeConditionWithResource["resource"], number> => {
   const pack: Partial<Record<EdgeConditionWithResource["resource"], number>> =
     initialPack ?? {};
 
@@ -597,11 +603,18 @@ const getPackFromPath = (
     addToPack(edge.resourceEffects);
   });
 
-  return pack;
+  // TODO real types
+  const zeroedResources: Record<EdgeConditionWithResource["resource"], number> =
+    _.mapValues(_.keyBy(allResources), () => 0) as Record<
+      EdgeConditionWithResource["resource"],
+      number
+    >;
+
+  return { ...zeroedResources, ...pack };
 };
 
 const packToCondition = (
-  pack: ReturnType<typeof getPackFromPath>
+  pack: Required<ReturnType<typeof getPackFromPath>>
 ): Cond<EdgeConditionWithResource> => ({
   _and: _.flatMap<typeof pack, Cond<EdgeConditionWithResource>>(
     pack,
@@ -629,7 +642,7 @@ const cleanupCheck = (
   states: typeof allStates,
   edges: typeof allEdges,
   edgeToClean: (typeof allEdges)[number]["name"],
-  pack: ReturnType<typeof getPackFromPath>
+  pack: Required<ReturnType<typeof getPackFromPath>>
   // false or cleanup path
 ): false | (typeof allEdges)[number]["name"][] => {
   const nameKeyedEdges = _.keyBy(edges, "name");
@@ -728,7 +741,8 @@ const cleanupCheck = (
 
         // if validNewHorizon contains a 0-pack, succeed
         const thing = ({ condition: cond }: HorizonEdge) =>
-          !_.isNil(cond) && _.every(resources, (r) => verifyCond(0, r, cond));
+          !_.isNil(cond) &&
+          _.every(allResources, (r) => verifyCond(0, r, cond));
         if (
           // FIXME inefficient
           _.some(validNewHorizon, (horizonEdge) => thing(horizonEdge))
