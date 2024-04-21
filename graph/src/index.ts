@@ -334,9 +334,10 @@ const getPathFromHorizonEdgeNames = (
   });
 };
 
-const getPathFromHorizons = (
+const traceValidPathThroughHorizons = (
   edges: typeof allEdges,
-  horizons: Horizon[]
+  horizons: Horizon[],
+  updatePackTo: (packValue: number, effectValue: number) => number
 ): (typeof allEdges)[number]["name"][] => {
   const effectPack: Partial<
     Record<EdgeConditionWithResource["resource"], number>
@@ -345,7 +346,7 @@ const getPathFromHorizons = (
     resource: EdgeConditionWithResource["resource"],
     value: number | undefined
   ) => {
-    effectPack[resource] = (effectPack[resource] ?? 0) + (value ?? 0);
+    effectPack[resource] = updatePackTo(effectPack[resource] ?? 0, value ?? 0);
   };
 
   const reversedHorizons = _.reverse(_.cloneDeep(horizons));
@@ -372,46 +373,6 @@ const getPathFromHorizons = (
   });
 };
 
-const getCleanupPathFromHorizons = (
-  edges: typeof allEdges,
-  horizons: Horizon[]
-  // initialPack?: Partial<Record<EdgeConditionWithResource["resource"], number>>
-): (typeof allEdges)[number]["name"][] => {
-  const effectPack: Partial<
-    Record<EdgeConditionWithResource["resource"], number>
-  > = {};
-  const addToPack = (
-    resource: EdgeConditionWithResource["resource"],
-    value: number | undefined
-  ) => {
-    effectPack[resource] = (effectPack[resource] ?? 0) - (value ?? 0);
-  };
-
-  const reversedHorizons = _.reverse(_.cloneDeep(horizons));
-
-  return _.map(reversedHorizons, (horizon) => {
-    const validEdges = _.filter(horizon, (edge) => {
-      const cond = edge.condition;
-      if (_.isNil(cond)) return true;
-
-      return _.every(allResources, (r) =>
-        verifyCond(effectPack[r] ?? 0, r, cond)
-      );
-    });
-    // TODO track multiple valid routes?
-    const validEdge = _.first(validEdges);
-    if (_.isNil(validEdge)) throw new Error("Horizons not traversable");
-
-    _.forEach(
-      _.find(edges, (e) => e.name === validEdge.name)?.resourceEffects,
-      // TODO proper typing
-      (val, res) => addToPack(res as EdgeConditionWithResource["resource"], val)
-    );
-
-    return validEdge.name;
-  });
-};
-
 const NONCONDITIONAL_PATH_LIMIT = 10;
 
 const getNonConditionalPaths = (
@@ -419,7 +380,7 @@ const getNonConditionalPaths = (
   edges: typeof allEdges,
   conditionalEdgePaths: {
     edgeName: (typeof allEdges)[number]["name"];
-    path: ReturnType<typeof getPathFromHorizons>;
+    path: ReturnType<typeof traceValidPathThroughHorizons>;
   }[]
 ) => {
   // for every nonconditional edge, determine path to a starting state using
@@ -456,7 +417,11 @@ const getNonConditionalPaths = (
       const conditionalEdgeFound: Partial<
         Record<
           (typeof conditionalEdgePathsWithEdgeData)[number]["edge"]["name"],
-          { pathToNonConditional: ReturnType<typeof getPathFromHorizons> }
+          {
+            pathToNonConditional: ReturnType<
+              typeof traceValidPathThroughHorizons
+            >;
+          }
         >
       > = {};
 
@@ -781,14 +746,16 @@ const cleanupCheck = (
     );
 
     return _.reverse(
-      getCleanupPathFromHorizons(
+      traceValidPathThroughHorizons(
         edges,
+        // ignore first element since it's the edge to clean
         _.tail(allHorizons).map((horizon) =>
           horizon.map((edge) => ({
             name: edge.edge,
             condition: edge.condition,
           }))
-        )
+        ),
+        (packValue, effectValue) => packValue - effectValue
       )
     );
   } catch (e) {
@@ -818,7 +785,11 @@ const runScheduler = (
   }
   const conditionalPaths = _.map(satisfiabilityCheckResult, (result) => ({
     edgeName: result.conditionalEdge,
-    path: getPathFromHorizons(edges, result.horizons),
+    path: traceValidPathThroughHorizons(
+      edges,
+      result.horizons,
+      (packValue, effectValue) => packValue + effectValue
+    ),
   }));
 
   console.log(JSON.stringify(conditionalPaths));
