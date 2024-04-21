@@ -766,7 +766,6 @@ const cleanupCheck = (
       }
     );
 
-    // TODO should backpropped version of this function get filtered too?
     return _.reverse(
       getCleanupPathFromHorizons(
         edges,
@@ -779,7 +778,7 @@ const cleanupCheck = (
       )
     );
   } catch (e) {
-    console.log(e);
+    console.error(e);
     return false;
   }
 };
