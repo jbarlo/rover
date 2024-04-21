@@ -185,6 +185,7 @@ const naiveSatisfiabilityCheck = (
           condition: _.cloneDeep(initialEdgeConditionMap[conditionalEdge.name]),
         },
       ];
+      // FIXME extract similarities with cleanupCheck
       const allHorizons = bfs<HorizonEdge>(
         CONDITIONAL_ITER_LIMIT,
         initialBackpropHorizon,
@@ -202,32 +203,26 @@ const naiveSatisfiabilityCheck = (
 
               // propagate the condition from backpropHorizonEdge to backEdges
               return _.map(backEdges, (backEdge) => {
-                const initialBackEdgeCondition = _.cloneDeep(
-                  initialEdgeConditionMap[backEdge.name]
-                );
+                const initialBackEdgeCondition =
+                  _.cloneDeep(initialEdgeConditionMap[backEdge.name]) ?? true;
 
-                const backproppedCondition = _.isNil(
-                  backpropHorizonEdgeCondition
-                )
-                  ? true
-                  : backpropagateCondition(
-                      backpropHorizonEdgeCondition,
-                      backEdge.resourceEffects
-                    );
+                const backproppedCondition = backpropagateCondition(
+                  backpropHorizonEdgeCondition ?? true,
+                  backEdge.resourceEffects
+                );
 
                 // for every backEdge,
                 // if no condition exists, use the backpropped condition
                 // if a condition exists, preserve it and AND it with the backpropped condition
 
-                const backEdgeCondition = _.isNil(initialBackEdgeCondition)
-                  ? _.cloneDeep(backproppedCondition)
-                  : // TODO if all backpropped conditions subsumed by edge's initial
-                    // condition, consider a DP approach
+                const backEdgeCondition =
+                  // TODO if all backpropped conditions subsumed by edge's initial
+                  // condition, consider a DP approach
 
-                    // TODO implement simplification for fewer test values
-                    combineCond({
-                      _and: [initialBackEdgeCondition, backproppedCondition],
-                    });
+                  // TODO implement simplification for fewer test values
+                  combineCond({
+                    _and: [initialBackEdgeCondition, backproppedCondition],
+                  });
 
                 return {
                   edge: backEdge,
@@ -316,6 +311,7 @@ const naiveSatisfiabilityCheck = (
   }
 };
 
+// TODO!! usage is sus. confirm filters are correct
 const getPathFromHorizonEdgeNames = (
   horizons: (typeof allEdges)[number]["name"][][],
   horizonEdgeFilter: (
@@ -425,6 +421,29 @@ const getNonConditionalPaths = (
         >
       > = {};
 
+      const checkHorizonForConditionalEdge = (
+        horizon: (typeof nonConditionalEdge.name)[]
+      ) => {
+        const horizonEdgeMatrix = _.flatMap(horizon, (edgeName) => {
+          const horizonEdge = nameKeyedEdges[edgeName];
+          if (_.isNil(horizonEdge)) return [];
+          return _.map(conditionalEdgePathsWithEdgeData, (e) => ({
+            horizonEdge,
+            conditionalEdge: e,
+          }));
+        });
+        const matchingConditionalEdge = _.find(
+          horizonEdgeMatrix,
+          (horizonEdgePair) =>
+            horizonEdgePair.horizonEdge.name ===
+            horizonEdgePair.conditionalEdge.edge.name
+        );
+
+        return _.isNil(matchingConditionalEdge)
+          ? undefined
+          : matchingConditionalEdge.conditionalEdge.edge.name;
+      };
+
       let allHorizons: (typeof nonConditionalEdge.name)[][] = [];
 
       // BFS for NONCONDITIONAL_PATH_LIMIT iterations or break if no more edges to
@@ -445,31 +464,13 @@ const getNonConditionalPaths = (
           }),
           (newHorizon, horizons, iter) => {
             // if horizon contains a conditional edge, store its path
-            const horizonEdgeMatrix = _.flatMap(newHorizon, (edgeName) => {
-              const horizonEdge = nameKeyedEdges[edgeName];
-              if (_.isNil(horizonEdge)) return [];
-              return _.map(conditionalEdgePathsWithEdgeData, (e) => ({
-                horizonEdge,
-                conditionalEdge: e,
-              }));
-            });
-            const matchingConditionalEdge = _.find(
-              horizonEdgeMatrix,
-              (horizonEdgePair) =>
-                horizonEdgePair.horizonEdge.name ===
-                horizonEdgePair.conditionalEdge.edge.name
-            );
+            const conditionalEdgeName =
+              checkHorizonForConditionalEdge(newHorizon);
             if (
-              !_.isNil(matchingConditionalEdge) &&
-              _.isNil(
-                conditionalEdgeFound[
-                  matchingConditionalEdge.conditionalEdge.edge.name
-                ]
-              )
+              !_.isNil(conditionalEdgeName) &&
+              _.isNil(conditionalEdgeFound[conditionalEdgeName])
             ) {
-              conditionalEdgeFound[
-                matchingConditionalEdge.conditionalEdge.edge.name
-              ] = {
+              conditionalEdgeFound[conditionalEdgeName] = {
                 // lop off the head. the conditional path includes its own edge
                 pathToNonConditional: _.tail(
                   // TODO confirm no filtering is needed here
@@ -478,6 +479,7 @@ const getNonConditionalPaths = (
               };
             }
 
+            // break if a starting state is reached
             if (
               _.some(newHorizon, (edgeName) => {
                 const edge = nameKeyedEdges[edgeName];
@@ -485,10 +487,10 @@ const getNonConditionalPaths = (
                 return _.some(startingStates, (s) => s.id === edge.from);
               })
             ) {
-              return false; // break if a starting state is reached
+              return false;
             }
 
-            return true;
+            return true; // continue
           }
         );
       } catch {
@@ -503,7 +505,7 @@ const getNonConditionalPaths = (
       }
 
       // conditional edge found, use the shortest total path
-      if (_.filter(conditionalEdgeFound, (v) => !_.isNil(v)).length > 0) {
+      if (!_.isEmpty(_.filter(conditionalEdgeFound, (v) => !_.isNil(v)))) {
         const shortestConditionalEdgePath = _.minBy(
           _.compact(
             _.map(conditionalEdgeFound, (val, edgeName) =>
@@ -534,6 +536,7 @@ const getNonConditionalPaths = (
 
       return {
         edge: nonConditionalEdge.name,
+        // TODO confirm no filtering is needed here
         path: getPathFromHorizonEdgeNames(allHorizons),
       };
     }
@@ -641,6 +644,7 @@ const cleanupCheck = (
     (!_.isBoolean(condition) && edgeConditionIsSatisfiable(condition));
 
   try {
+    // FIXME extract similarities with naiveSatisfiabilityCheck
     const allHorizons = bfs<HorizonEdge>(
       CONDITIONAL_CLEANUP_ITER_LIMIT,
       initialBackpropHorizon,
@@ -671,9 +675,10 @@ const cleanupCheck = (
               ) {
                 return null;
               }
-              const proppedCondition = _.isNil(condition)
-                ? true
-                : propagateCondition(condition, horizonEdge.resourceEffects);
+              const proppedCondition = propagateCondition(
+                condition ?? true,
+                horizonEdge.resourceEffects
+              );
 
               // for every horizonEdge,
               // if no condition exists, use the propped condition
