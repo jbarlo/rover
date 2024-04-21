@@ -112,6 +112,162 @@ const bfs = <T>(
   return horizons;
 };
 
+type SpecialHorizonEdge = {
+  edge: Pick<
+    (typeof allEdges)[number],
+    "name" | "resourceEffects" | "to" | "from"
+  >;
+  condition: HorizonEdgeCondition;
+};
+const specialBFS = (
+  edges: typeof allEdges,
+  iterLimit: number,
+  initialHorizon: SpecialHorizonEdge[],
+  getEdgeNeighbours: (
+    edge: (typeof allEdges)[number]
+  ) => Pick<
+    (typeof allEdges)[number],
+    "name" | "resourceEffects" | "to" | "from"
+  >[],
+  // TODO rename
+  checkUnpropagatedCondition: boolean,
+  conditionIsValid: (condition: HorizonEdgeCondition) => boolean,
+  // TODO rename
+  propagation: (
+    cond: Cond<boolean | EdgeConditionWithResource>,
+    resourceEffects: Partial<Record<"apples" | "bananas", number>> | undefined
+  ) => Cond<boolean | EdgeConditionWithResource>,
+  horizonValidityFilter: (horizonElement: SpecialHorizonEdge) => boolean,
+  thing: (edge: SpecialHorizonEdge) => boolean
+) => {
+  const nameKeyedEdges = _.keyBy(edges, "name");
+  const initialEdgeConditionMap: Partial<
+    Record<
+      (typeof edges)[number]["name"],
+      Cond<EdgeConditionWithResource | boolean>
+    >
+  > = _.mapValues(nameKeyedEdges, (edge) => _.cloneDeep(edge.condition));
+
+  // TODO make prettyPrint condition order deterministic
+  const serializeHorizonEdge = (edge: SpecialHorizonEdge): string =>
+    `${edge.edge}:${
+      _.isNil(edge.condition) ? undefined : prettyPrint(edge.condition)
+    }`;
+
+  return bfs<SpecialHorizonEdge>(
+    iterLimit,
+    initialHorizon,
+    (prev) => {
+      const newBackpropHorizon = _.flatMap(
+        prev,
+        ({
+          edge: backpropHorizonEdge,
+          condition: backpropHorizonEdgeCondition,
+        }) => {
+          const edge = nameKeyedEdges[backpropHorizonEdge.name];
+          if (_.isNil(edge)) return [];
+
+          // get all edges that point to backpropHorizonEdge
+          const backEdges = getEdgeNeighbours(edge);
+
+          // propagate the condition from backpropHorizonEdge to backEdges
+          return _.compact(
+            _.map(backEdges, (backEdge) => {
+              const initialBackEdgeCondition =
+                _.cloneDeep(initialEdgeConditionMap[backEdge.name]) ?? true;
+
+              if (
+                checkUnpropagatedCondition &&
+                !conditionIsValid(
+                  simplifyHorizonEdgeCond(
+                    combineCond({
+                      _and: [
+                        initialBackEdgeCondition,
+                        backpropHorizonEdgeCondition ?? true,
+                      ],
+                    })
+                  )
+                )
+              ) {
+                return null;
+              }
+
+              const backproppedCondition = propagation(
+                backpropHorizonEdgeCondition ?? true,
+                backEdge.resourceEffects
+              );
+
+              // for every backEdge,
+              // if no condition exists, use the backpropped condition
+              // if a condition exists, preserve it and AND it with the backpropped condition
+
+              const backEdgeCondition =
+                // TODO if all backpropped conditions subsumed by edge's initial
+                // condition, consider a DP approach
+
+                // TODO implement simplification for fewer test values
+                combineCond({
+                  _and: [initialBackEdgeCondition, backproppedCondition],
+                });
+
+              return {
+                edge: backEdge,
+                condition: simplifyHorizonEdgeCond(backEdgeCondition),
+              };
+            })
+          );
+        }
+      );
+
+      // filter newBackPropHorizon of any invalid conditions
+      const validNewBackpropHorizon = _.uniqBy(
+        newBackpropHorizon.filter(horizonValidityFilter),
+        // TODO does the edge name even matter? maybe yes, to calculate
+        // alternative paths
+        (h) => serializeHorizonEdge(h)
+      );
+
+      // if thing passes, succeed
+      if (
+        // FIXME inefficient
+        _.some(validNewBackpropHorizon, (horizonEdge) => thing(horizonEdge))
+      ) {
+        console.log("Conditional Edge Succeeded");
+
+        return {
+          endWithoutChecking: true,
+          // record edges that are off of starting states and have valid
+          // conditions
+          horizon: _.filter(validNewBackpropHorizon, (horizonEdge) =>
+            thing(horizonEdge)
+          ),
+        };
+      }
+
+      return { horizon: validNewBackpropHorizon };
+    },
+    (newHorizon, horizons, iter) => {
+      // if iterLimit is reached, fail
+      if (iter >= iterLimit - 1) {
+        console.log("Conditional Edge Failed");
+        console.log(
+          JSON.stringify(
+            _.map(newHorizon, (h) => ({
+              ...h,
+              condition: _.isNil(h.condition)
+                ? "undefined"
+                : prettyPrint(h.condition),
+            }))
+          )
+        );
+        throw new Error("Iteration limit reached");
+      }
+
+      return true;
+    }
+  );
+};
+
 const CONDITIONAL_ITER_LIMIT = 10;
 
 // Check if all conditional edges have some route from a starting state that
@@ -173,11 +329,6 @@ const naiveSatisfiabilityCheck = (
         edge: typeof conditionalEdge;
         condition: HorizonEdgeCondition;
       };
-      // TODO make prettyPrint condition order deterministic
-      const serializeHorizonEdge = (edge: HorizonEdge): string =>
-        `${edge.edge.name}:${
-          _.isNil(edge.condition) ? undefined : prettyPrint(edge.condition)
-        }`;
 
       const initialBackpropHorizon: HorizonEdge[] = [
         {
@@ -185,111 +336,29 @@ const naiveSatisfiabilityCheck = (
           condition: _.cloneDeep(initialEdgeConditionMap[conditionalEdge.name]),
         },
       ];
-      // FIXME extract similarities with cleanupCheck
-      const allHorizons = bfs<HorizonEdge>(
+
+      const allHorizons = specialBFS(
+        edges,
         CONDITIONAL_ITER_LIMIT,
         initialBackpropHorizon,
-        (prev) => {
-          const newBackpropHorizon = _.flatMap(
-            prev,
-            ({
-              edge: backpropHorizonEdge,
-              condition: backpropHorizonEdgeCondition,
-            }) => {
-              // get all edges that point to backpropHorizonEdge
-              const backEdges = conditionStrippedEdges.filter(
-                (e) => e.to === backpropHorizonEdge.from
-              );
-
-              // propagate the condition from backpropHorizonEdge to backEdges
-              return _.map(backEdges, (backEdge) => {
-                const initialBackEdgeCondition =
-                  _.cloneDeep(initialEdgeConditionMap[backEdge.name]) ?? true;
-
-                const backproppedCondition = backpropagateCondition(
-                  backpropHorizonEdgeCondition ?? true,
-                  backEdge.resourceEffects
-                );
-
-                // for every backEdge,
-                // if no condition exists, use the backpropped condition
-                // if a condition exists, preserve it and AND it with the backpropped condition
-
-                const backEdgeCondition =
-                  // TODO if all backpropped conditions subsumed by edge's initial
-                  // condition, consider a DP approach
-
-                  // TODO implement simplification for fewer test values
-                  combineCond({
-                    _and: [initialBackEdgeCondition, backproppedCondition],
-                  });
-
-                return {
-                  edge: backEdge,
-                  condition: simplifyHorizonEdgeCond(backEdgeCondition),
-                };
-              });
-            }
-          );
-
-          // filter newBackPropHorizon of any invalid conditions
-          const validNewBackpropHorizon = _.uniqBy(
-            newBackpropHorizon.filter(
-              ({ condition }) =>
-                _.isNil(condition) || edgeConditionIsSatisfiable(condition)
-            ),
-            // TODO does the edge name even matter? maybe yes, to calculate
-            // alternative paths
-            (h) => serializeHorizonEdge(h)
-          );
-
-          // if validNewBackpropHorizon contains an edge off of the starting state,
-          // (and implicitly the condition is valid), succeed
-          const thing = ({ edge: e, condition: cond }: HorizonEdge) =>
-            _.some(
-              startingStates,
-              (s): boolean =>
-                e.from === s.id &&
-                !_.isNil(cond) &&
-                _.every(allResources, (r) => verifyCond(0, r, cond))
-            );
-          if (
-            // FIXME inefficient
-            _.some(validNewBackpropHorizon, (horizonEdge) => thing(horizonEdge))
-          ) {
-            console.log("Conditional Edge Succeeded: ", conditionalEdge.name);
-
-            return {
-              endWithoutChecking: true,
-              // record edges that are off of starting states and have valid
-              // conditions
-              horizon: _.filter(validNewBackpropHorizon, (horizonEdge) =>
-                thing(horizonEdge)
-              ),
-            };
-          }
-
-          return { horizon: validNewBackpropHorizon };
-        },
-        (newHorizon, horizons, iter) => {
-          // if iterLimit is reached, fail
-          if (iter >= CONDITIONAL_ITER_LIMIT - 1) {
-            console.log("Conditional Edge Failed: ", conditionalEdge.name);
-            console.log(
-              JSON.stringify(
-                _.map(newHorizon, (h) => ({
-                  ...h,
-                  condition: _.isNil(h.condition)
-                    ? "undefined"
-                    : prettyPrint(h.condition),
-                }))
-              )
-            );
-            throw new Error("Iteration limit reached");
-          }
-
-          return true;
-        }
+        (edge) => conditionStrippedEdges.filter((e) => e.to === edge.from),
+        false,
+        (condition) =>
+          _.isNil(condition) || edgeConditionIsSatisfiable(condition),
+        (cond, resourceEffects) =>
+          backpropagateCondition(cond, resourceEffects),
+        ({ condition }) =>
+          _.isNil(condition) || edgeConditionIsSatisfiable(condition),
+        // if validNewBackpropHorizon contains an edge off of the starting
+        // state, (and implicitly the condition is valid), succeed
+        ({ edge: e, condition: cond }) =>
+          _.some(
+            startingStates,
+            (s): boolean =>
+              e.from === s.id &&
+              !_.isNil(cond) &&
+              _.every(allResources, (r) => verifyCond(0, r, cond))
+          )
       );
 
       return {
@@ -613,29 +682,17 @@ const cleanupCheck = (
   pack: Required<ReturnType<typeof getPackFromPath>>
   // false or cleanup path
 ): false | (typeof allEdges)[number]["name"][] => {
-  const nameKeyedEdges = _.keyBy(edges, "name");
-  const initialEdgeConditionMap: Partial<
-    Record<
-      (typeof edges)[number]["name"],
-      Cond<EdgeConditionWithResource | boolean>
-    >
-  > = _.mapValues(nameKeyedEdges, (edge) => _.cloneDeep(edge.condition));
-
   const conditionStrippedEdges = edges.map((edge) => _.omit(edge, "condition"));
 
-  type HorizonEdge = {
-    edge: (typeof edges)[number]["name"];
-    condition: HorizonEdgeCondition;
-  };
+  const initialEdge: SpecialHorizonEdge["edge"] | undefined = _.find(
+    edges,
+    (e) => e.name === edgeToClean
+  );
 
-  // TODO make prettyPrint condition order deterministic
-  const serializeHorizonEdge = (edge: HorizonEdge): string =>
-    `${edge.edge}:${
-      _.isNil(edge.condition) ? undefined : prettyPrint(edge.condition)
-    }`;
+  if (_.isNil(initialEdge)) throw new Error("Edge not found");
 
-  const initialBackpropHorizon: HorizonEdge[] = [
-    { edge: edgeToClean, condition: packToCondition(pack) },
+  const initialBackpropHorizon: SpecialHorizonEdge[] = [
+    { edge: initialEdge, condition: packToCondition(pack) },
   ];
 
   const conditionIsValid = (condition: HorizonEdgeCondition) =>
@@ -644,110 +701,18 @@ const cleanupCheck = (
     (!_.isBoolean(condition) && edgeConditionIsSatisfiable(condition));
 
   try {
-    // FIXME extract similarities with naiveSatisfiabilityCheck
-    const allHorizons = bfs<HorizonEdge>(
+    const allHorizons = specialBFS(
+      edges,
       CONDITIONAL_CLEANUP_ITER_LIMIT,
       initialBackpropHorizon,
-      (prev) => {
-        const newHorizon = _.flatMap(prev, ({ edge: edgeName, condition }) => {
-          const edge = nameKeyedEdges[edgeName];
-          if (_.isNil(edge)) return [];
-
-          // get all edges that point from backpropHorizonEdge
-          const horizonEdges = conditionStrippedEdges.filter(
-            (e) => e.from === edge.to
-          );
-
-          // propagate the condition from backpropHorizonEdge to horizonEdges
-          return _.compact(
-            _.map(horizonEdges, (horizonEdge) => {
-              const initialHorizonEdgeCondition =
-                _.cloneDeep(initialEdgeConditionMap[horizonEdge.name]) ?? true;
-
-              if (
-                !conditionIsValid(
-                  simplifyHorizonEdgeCond(
-                    combineCond({
-                      _and: [initialHorizonEdgeCondition, condition ?? true],
-                    })
-                  )
-                )
-              ) {
-                return null;
-              }
-              const proppedCondition = propagateCondition(
-                condition ?? true,
-                horizonEdge.resourceEffects
-              );
-
-              // for every horizonEdge,
-              // if no condition exists, use the propped condition
-              // if a condition exists, preserve it and AND it with the propped condition
-
-              const nextEdgeCondition =
-                // TODO if all propped conditions subsumed by edge's initial
-                // condition, consider a DP approach
-
-                // TODO implement simplification for fewer test values
-                combineCond({
-                  _and: [initialHorizonEdgeCondition, proppedCondition],
-                });
-
-              return {
-                edge: horizonEdge.name,
-                condition: simplifyHorizonEdgeCond(nextEdgeCondition),
-              };
-            })
-          );
-        });
-
-        // filter newHorizon of any invalid conditions
-        const validNewHorizon = _.uniqBy(
-          newHorizon,
-          // TODO does the edge name even matter? maybe yes, to calculate
-          // alternative paths
-          (h) => serializeHorizonEdge(h)
-        );
-
-        // if validNewHorizon contains a 0-pack, succeed
-        const thing = ({ condition: cond }: HorizonEdge) =>
-          !_.isNil(cond) &&
-          _.every(allResources, (r) => verifyCond(0, r, cond));
-        if (
-          // FIXME inefficient
-          _.some(validNewHorizon, (horizonEdge) => thing(horizonEdge))
-        ) {
-          return {
-            endWithoutChecking: true,
-            // record edges that are off of starting states and have valid
-            // conditions
-            horizon: _.filter(validNewHorizon, (horizonEdge) =>
-              thing(horizonEdge)
-            ),
-          };
-        }
-
-        return { horizon: validNewHorizon };
-      },
-      (newHorizon, horizons, iter) => {
-        // if iterLimit is reached, fail
-        if (iter >= CONDITIONAL_CLEANUP_ITER_LIMIT - 1) {
-          console.log("Conditional Edge Failed: ", edgeToClean);
-          console.log(
-            JSON.stringify(
-              _.map(newHorizon, (h) => ({
-                ...h,
-                condition: _.isNil(h.condition)
-                  ? "undefined"
-                  : prettyPrint(h.condition),
-              }))
-            )
-          );
-          throw new Error("Iteration limit reached");
-        }
-
-        return true;
-      }
+      (edge) => conditionStrippedEdges.filter((e) => e.from === edge.to),
+      true,
+      conditionIsValid,
+      (cond, resourceEffects) => propagateCondition(cond, resourceEffects),
+      () => true,
+      // if validNewHorizon contains a 0-pack, succeed
+      ({ condition: cond }) =>
+        !_.isNil(cond) && _.every(allResources, (r) => verifyCond(0, r, cond))
     );
 
     return _.reverse(
@@ -756,7 +721,7 @@ const cleanupCheck = (
         // ignore first element since it's the edge to clean
         _.tail(allHorizons).map((horizon) =>
           horizon.map((edge) => ({
-            name: edge.edge,
+            name: edge.edge.name,
             condition: edge.condition,
           }))
         ),
