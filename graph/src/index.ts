@@ -376,56 +376,23 @@ const getCleanupPathFromHorizons = (
   const effectPack: Partial<
     Record<EdgeConditionWithResource["resource"], number>
   > = {};
-  const checkPackResult = (
-    resource: EdgeConditionWithResource["resource"],
-    value: number | undefined
-  ) => (effectPack[resource] ?? 0) - (value ?? 0);
-  const peekNextPack = (
-    currPack: Partial<Record<EdgeConditionWithResource["resource"], number>>,
-    resourceEffects: NonNullable<(typeof edges)[number]["resourceEffects"]>
-  ) => {
-    const clonedPack = _.cloneDeep(currPack);
-    _.forEach(
-      resourceEffects,
-      // TODO proper typing
-      (val, res) => {
-        const resource = res as EdgeConditionWithResource["resource"];
-        clonedPack[resource] = checkPackResult(resource, val);
-      }
-    );
-    return clonedPack;
-  };
   const addToPack = (
     resource: EdgeConditionWithResource["resource"],
     value: number | undefined
   ) => {
-    effectPack[resource] = checkPackResult(resource, value);
+    effectPack[resource] = (effectPack[resource] ?? 0) - (value ?? 0);
   };
 
   const reversedHorizons = _.reverse(_.cloneDeep(horizons));
 
   return _.map(reversedHorizons, (horizon) => {
-    // console.log("EFFECT PACK");
-    // console.log(JSON.stringify(effectPack));
-    // console.log("EDGES");
-    // console.log(horizon);
-
     const validEdges = _.filter(horizon, (edge) => {
       const cond = edge.condition;
       if (_.isNil(cond)) return true;
 
-      // const peekedPack = peekNextPack(
-      //   effectPack,
-      //   _.find(edges, (e) => e.name === edge.name)?.resourceEffects ?? {}
-      // );
-      // console.log("PEEKED PACK:", edge.name);
-      // console.log(JSON.stringify(peekedPack));
-
       return _.every(resources, (r) => verifyCond(effectPack[r] ?? 0, r, cond));
     });
     // TODO track multiple valid routes?
-    // console.log("VALID EDGES");
-    // console.log(validEdges);
     const validEdge = _.first(validEdges);
     if (_.isNil(validEdge)) throw new Error("Horizons not traversable");
 
@@ -709,8 +676,6 @@ const cleanupCheck = (
             (e) => e.from === edge.to
           );
 
-          // console.log(horizonEdges.map((h) => h.name));
-
           // propagate the condition from backpropHorizonEdge to horizonEdges
           return _.compact(
             _.map(horizonEdges, (horizonEdge) => {
@@ -731,12 +696,6 @@ const cleanupCheck = (
               const proppedCondition = _.isNil(condition)
                 ? true
                 : propagateCondition(condition, horizonEdge.resourceEffects);
-              // console.log(
-              // horizonEdge.name,
-              // JSON.stringify(horizonEdge.resourceEffects),
-              // JSON.stringify(condition),
-              // JSON.stringify(proppedCondition)
-              // );
 
               // for every horizonEdge,
               // if no condition exists, use the propped condition
@@ -754,7 +713,6 @@ const cleanupCheck = (
               return {
                 edge: horizonEdge.name,
                 condition: simplifyHorizonEdgeCond(nextEdgeCondition),
-                unsimplifiedCond: nextEdgeCondition,
               };
             })
           );
@@ -763,30 +721,10 @@ const cleanupCheck = (
         // filter newHorizon of any invalid conditions
         const validNewHorizon = _.uniqBy(
           newHorizon,
-          // newHorizon.filter(({ condition }) =>
-          // !!TODO!! filter out edges where pack value doesn't match?
-          // covered already by constraints?
-          // conditionIsValid(condition)
-          // ),
           // TODO does the edge name even matter? maybe yes, to calculate
           // alternative paths
           (h) => serializeHorizonEdge(h)
         );
-
-        // console.log("PREV");
-        // console.log(JSON.stringify(prev));
-        // console.log("NEW HORIZON");
-        // console.log(JSON.stringify(newHorizon));
-        // console.log("MAPPED NEW");
-        // console.log(
-        //   JSON.stringify(_.map(newHorizon, (h) => serializeHorizonEdge(h)))
-        // );
-        // console.log("VALID NEW HORIZON");
-        // console.log(JSON.stringify(validNewHorizon));
-        // console.log("MAPPED VALID NEW");
-        // console.log(
-        //   JSON.stringify(_.map(validNewHorizon, (h) => serializeHorizonEdge(h)))
-        // );
 
         // if validNewHorizon contains a 0-pack, succeed
         const thing = ({ condition: cond }: HorizonEdge) =>
@@ -828,19 +766,9 @@ const cleanupCheck = (
       }
     );
 
-    console.log(
-      JSON.stringify(
-        _.map(allHorizons, (horizon) => horizon.map((h) => h.edge))
-      )
-    );
-
     // TODO should backpropped version of this function get filtered too?
     return _.reverse(
       getCleanupPathFromHorizons(
-        // !!TODO!! getPathFromHorizonEdgeNames assumes no conds and therefore
-        //  that all paths from any horizon element to another is valid.
-        //  swap/modify alg that filters out impossible paths.
-        // maybe getPathFromHorizons? or maybe they can all be combined
         edges,
         _.tail(allHorizons).map((horizon) =>
           horizon.map((edge) => ({
@@ -848,11 +776,6 @@ const cleanupCheck = (
             condition: edge.condition,
           }))
         )
-        // (edgeName) => {
-        //   const edge = nameKeyedEdges[edgeName];
-        //   if (_.isNil(edge)) return false;
-        //   return conditionIsValid(edge.condition);
-        // }
       )
     );
   } catch (e) {
