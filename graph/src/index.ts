@@ -439,7 +439,10 @@ const getNonConditionalPaths = (
     edgeName: (typeof allEdges)[number]["name"];
     path: ReturnType<typeof traceValidPathThroughHorizons>;
   }[]
-) => {
+): {
+  edgeName: (typeof allEdges)[number]["name"];
+  path: ReturnType<typeof traceValidPathThroughHorizons>;
+}[] => {
   // for every nonconditional edge, determine path to a starting state using
   // conditional edges
   const startingStates = getStartingStates(states);
@@ -466,7 +469,7 @@ const getNonConditionalPaths = (
       // if nonconditional edge starts at a starting state, return it
       if (_.some(startingStates, (s) => s.id === nonConditionalEdge.from)) {
         return {
-          edge: nonConditionalEdge.name,
+          edgeName: nonConditionalEdge.name,
           path: [nonConditionalEdge.name],
         };
       }
@@ -587,7 +590,7 @@ const getNonConditionalPaths = (
           nameKeyedConditionalEdgePaths[shortestConditionalEdgePath.edgeName];
         if (_.isNil(conditionalEdgePath)) return null;
         return {
-          edge: nonConditionalEdge.name,
+          edgeName: nonConditionalEdge.name,
           path: [
             ...conditionalEdgePath.path,
             ...shortestConditionalEdgePath.pathToNonConditional,
@@ -596,7 +599,7 @@ const getNonConditionalPaths = (
       }
 
       return {
-        edge: nonConditionalEdge.name,
+        edgeName: nonConditionalEdge.name,
         // TODO confirm no filtering is needed here
         path: getPathFromHorizonEdgeNames(allHorizons),
       };
@@ -667,8 +670,7 @@ const packToCondition = (
 
 const CONDITIONAL_CLEANUP_ITER_LIMIT = 10;
 
-const cleanupCheck = (
-  states: typeof allStates,
+const getCleanupPath = (
   edges: typeof allEdges,
   edgeToClean: (typeof allEdges)[number]["name"],
   pack: Required<ReturnType<typeof getPackFromPath>>
@@ -679,8 +681,15 @@ const cleanupCheck = (
 
   if (_.isNil(initialEdge)) throw new Error("Edge not found");
 
+  const initialCond = packToCondition(pack);
+
+  const condIsSuccessful = (cond: HorizonEdgeCondition) =>
+    !_.isNil(cond) && _.every(allResources, (r) => verifyCond(0, r, cond));
+
+  if (condIsSuccessful(initialCond)) return []; // done early!
+
   const initialBackpropHorizon: ConditionalPropagationBfsHorizonEdge[] = [
-    { edge: initialEdge, condition: packToCondition(pack) },
+    { edge: initialEdge, condition: initialCond },
   ];
 
   const unpropagatedConditionPredicate = (condition: HorizonEdgeCondition) =>
@@ -697,8 +706,7 @@ const cleanupCheck = (
       (packValue, effectValue) => packValue + effectValue,
       () => true,
       // if validNewHorizon contains a 0-pack, succeed
-      ({ condition: cond }) =>
-        !_.isNil(cond) && _.every(allResources, (r) => verifyCond(0, r, cond)),
+      ({ condition: cond }) => condIsSuccessful(cond),
       unpropagatedConditionPredicate
     );
 
@@ -765,24 +773,26 @@ const runScheduler = (
     )
   );
 
-  // !!TODO!! add all implicit state -> starting state edges
-  // TODO actually get valid results
-  // TODO calculate for all paths
-  _.forEach(nonConditionalPaths, (path, i) => {
-    console.log(i);
-    console.log(path.edge);
-    console.log(getPackFromPath(path.path, edges));
-    console.log(
-      JSON.stringify(
-        cleanupCheck(
-          states,
+  // TODO effectful implicit nav edges: add all implicit state -> starting state
+  // edges to calculate complete paths
+
+  const cleanupPaths = _.map(
+    [...conditionalPaths, ...nonConditionalPaths],
+    (path, i) => {
+      return {
+        edgeName: path.edgeName,
+        // drop last path element since it's the edge to clean
+        preparationPath: _.initial(path.path),
+        cleanupPath: getCleanupPath(
           edges,
-          path.edge,
+          path.edgeName,
           getPackFromPath(path.path, edges)
-        )
-      )
-    );
-  });
+        ),
+      };
+    }
+  );
+
+  console.log(JSON.stringify(cleanupPaths));
 
   // TODO
   return [];
