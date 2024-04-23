@@ -30,27 +30,14 @@ export const propagateCondition = (
   cond: Cond<EdgeConditionWithResource | boolean>,
   resourceEffects:
     | ResourceEffects<EdgeConditionWithResource["resource"]>
-    | undefined
+    | undefined,
+  propagate: (packValue: number, effectValue: number) => number
 ): Cond<EdgeConditionWithResource | boolean> => {
   return mapCond(cond, (c) => {
     if (_.isBoolean(c) || _.isNil(resourceEffects)) return c;
     const resourceEffect: number | undefined = resourceEffects[c.resource];
     if (_.isNil(resourceEffect)) return c;
-    return { ...c, value: c.value + resourceEffect };
-  });
-};
-
-export const backpropagateCondition = (
-  cond: Cond<EdgeConditionWithResource | boolean>,
-  resourceEffects:
-    | ResourceEffects<EdgeConditionWithResource["resource"]>
-    | undefined
-): Cond<EdgeConditionWithResource | boolean> => {
-  return mapCond(cond, (c) => {
-    if (_.isBoolean(c) || _.isNil(resourceEffects)) return c;
-    const resourceEffect: number | undefined = resourceEffects[c.resource];
-    if (_.isNil(resourceEffect)) return c;
-    return { ...c, value: c.value - resourceEffect };
+    return { ...c, value: propagate(c.value, resourceEffect) };
   });
 };
 

@@ -8,7 +8,6 @@ import _ from "lodash";
 import {
   EdgeConditionWithResource,
   HorizonEdgeCondition,
-  backpropagateCondition,
   edgeConditionIsSatisfiable,
   prettyPrint,
   propagateCondition,
@@ -119,7 +118,7 @@ type SpecialHorizonEdge = {
   >;
   condition: HorizonEdgeCondition;
 };
-const specialBFS = (
+const conditionalPropagationBfs = (
   edges: typeof allEdges,
   iterLimit: number,
   initialHorizon: SpecialHorizonEdge[],
@@ -129,16 +128,15 @@ const specialBFS = (
     (typeof allEdges)[number],
     "name" | "resourceEffects" | "to" | "from"
   >[],
-  // TODO rename
-  checkUnpropagatedCondition: boolean,
-  conditionIsValid: (condition: HorizonEdgeCondition) => boolean,
-  // TODO rename
-  propagation: (
-    cond: Cond<boolean | EdgeConditionWithResource>,
-    resourceEffects: Partial<Record<"apples" | "bananas", number>> | undefined
-  ) => Cond<boolean | EdgeConditionWithResource>,
-  horizonValidityFilter: (horizonElement: SpecialHorizonEdge) => boolean,
-  thing: (edge: SpecialHorizonEdge) => boolean
+  resourceEffectEvaluator: (packValue: number, effectValue: number) => number,
+  propagatedNextHorizonValidityPredicate: (
+    horizonElement: SpecialHorizonEdge
+  ) => boolean,
+  // if any horizon element passes, succeed. passing results become the final
+  // horizon
+  successPredicate: (edge: SpecialHorizonEdge) => boolean,
+  // if defined, filters by valid conditions before they are propagated
+  unpropagatedConditionPredicate?: (condition: HorizonEdgeCondition) => boolean
 ) => {
   const nameKeyedEdges = _.keyBy(edges, "name");
   const initialEdgeConditionMap: Partial<
@@ -150,7 +148,7 @@ const specialBFS = (
 
   // TODO make prettyPrint condition order deterministic
   const serializeHorizonEdge = (edge: SpecialHorizonEdge): string =>
-    `${edge.edge}:${
+    `${edge.edge.name}:${
       _.isNil(edge.condition) ? undefined : prettyPrint(edge.condition)
     }`;
 
@@ -158,32 +156,33 @@ const specialBFS = (
     iterLimit,
     initialHorizon,
     (prev) => {
-      const newBackpropHorizon = _.flatMap(
+      const nextHorizon = _.flatMap(
         prev,
         ({
-          edge: backpropHorizonEdge,
-          condition: backpropHorizonEdgeCondition,
+          edge: { name: prevHorizonEdgeName },
+          condition: prevHorizonEdgeCondition,
         }) => {
-          const edge = nameKeyedEdges[backpropHorizonEdge.name];
-          if (_.isNil(edge)) return [];
+          const prevHorizonEdge = nameKeyedEdges[prevHorizonEdgeName];
+          if (_.isNil(prevHorizonEdge)) return [];
 
-          // get all edges that point to backpropHorizonEdge
-          const backEdges = getEdgeNeighbours(edge);
+          // get all edges that are directional neighbours to prevHorizonEdge
+          const neighbours = getEdgeNeighbours(prevHorizonEdge);
 
-          // propagate the condition from backpropHorizonEdge to backEdges
+          // propagate the condition from prevHorizonEdge to neighbours
           return _.compact(
-            _.map(backEdges, (backEdge) => {
-              const initialBackEdgeCondition =
-                _.cloneDeep(initialEdgeConditionMap[backEdge.name]) ?? true;
+            _.map(neighbours, (neighbourEdge) => {
+              const initialEdgeCondition =
+                _.cloneDeep(initialEdgeConditionMap[neighbourEdge.name]) ??
+                true;
 
               if (
-                checkUnpropagatedCondition &&
-                !conditionIsValid(
+                !_.isNil(unpropagatedConditionPredicate) &&
+                !unpropagatedConditionPredicate(
                   simplifyHorizonEdgeCond(
                     combineCond({
                       _and: [
-                        initialBackEdgeCondition,
-                        backpropHorizonEdgeCondition ?? true,
+                        initialEdgeCondition,
+                        prevHorizonEdgeCondition ?? true,
                       ],
                     })
                   )
@@ -192,27 +191,30 @@ const specialBFS = (
                 return null;
               }
 
-              const backproppedCondition = propagation(
-                backpropHorizonEdgeCondition ?? true,
-                backEdge.resourceEffects
+              const propagatedCondition = propagateCondition(
+                prevHorizonEdgeCondition ?? true,
+                neighbourEdge.resourceEffects,
+                resourceEffectEvaluator
               );
 
-              // for every backEdge,
-              // if no condition exists, use the backpropped condition
+              // for every neighbour,
+              // if no condition exists, use only the propped condition
+              //    (true && propped condition)
               // if a condition exists, preserve it and AND it with the backpropped condition
+              //    (existing condition && propped condition)
 
-              const backEdgeCondition =
-                // TODO if all backpropped conditions subsumed by edge's initial
+              const totalCondition =
+                // TODO if all propped conditions subsumed by edge's initial
                 // condition, consider a DP approach
 
                 // TODO implement simplification for fewer test values
                 combineCond({
-                  _and: [initialBackEdgeCondition, backproppedCondition],
+                  _and: [initialEdgeCondition, propagatedCondition],
                 });
 
               return {
-                edge: backEdge,
-                condition: simplifyHorizonEdgeCond(backEdgeCondition),
+                edge: neighbourEdge,
+                condition: simplifyHorizonEdgeCond(totalCondition),
               };
             })
           );
@@ -220,17 +222,17 @@ const specialBFS = (
       );
 
       // filter newBackPropHorizon of any invalid conditions
-      const validNewBackpropHorizon = _.uniqBy(
-        newBackpropHorizon.filter(horizonValidityFilter),
+      const validNextHorizon = _.uniqBy(
+        nextHorizon.filter(propagatedNextHorizonValidityPredicate),
         // TODO does the edge name even matter? maybe yes, to calculate
         // alternative paths
         (h) => serializeHorizonEdge(h)
       );
 
-      // if thing passes, succeed
+      // if successPredicate passes, succeed 🤯
       if (
         // FIXME inefficient
-        _.some(validNewBackpropHorizon, (horizonEdge) => thing(horizonEdge))
+        _.some(validNextHorizon, (horizonEdge) => successPredicate(horizonEdge))
       ) {
         console.log("Conditional Edge Succeeded");
 
@@ -238,13 +240,13 @@ const specialBFS = (
           endWithoutChecking: true,
           // record edges that are off of starting states and have valid
           // conditions
-          horizon: _.filter(validNewBackpropHorizon, (horizonEdge) =>
-            thing(horizonEdge)
+          horizon: _.filter(validNextHorizon, (horizonEdge) =>
+            successPredicate(horizonEdge)
           ),
         };
       }
 
-      return { horizon: validNewBackpropHorizon };
+      return { horizon: validNextHorizon };
     },
     (newHorizon, horizons, iter) => {
       // if iterLimit is reached, fail
@@ -299,12 +301,8 @@ const naiveSatisfiabilityCheck = (
     >
   > = _.mapValues(nameKeyedEdges, (edge) => _.cloneDeep(edge.condition));
 
-  const conditionStrippedEdges = edges.map((edge) => _.omit(edge, "condition"));
-
   const startingStates = getStartingStates(states);
-  const conditionalEdges = edges
-    .filter((e) => !_.isNil(e.condition))
-    .map((edge) => _.omit(edge, "condition"));
+  const conditionalEdges = edges.filter((e) => !_.isNil(e.condition));
 
   try {
     const everyConditionalEdgesHorizons = _.map<
@@ -337,21 +335,17 @@ const naiveSatisfiabilityCheck = (
         },
       ];
 
-      const allHorizons = specialBFS(
+      const allHorizons = conditionalPropagationBfs(
         edges,
         CONDITIONAL_ITER_LIMIT,
         initialBackpropHorizon,
-        (edge) => conditionStrippedEdges.filter((e) => e.to === edge.from),
-        false,
-        (condition) =>
-          _.isNil(condition) || edgeConditionIsSatisfiable(condition),
-        (cond, resourceEffects) =>
-          backpropagateCondition(cond, resourceEffects),
+        (neighbour) => edges.filter((e) => e.to === neighbour.from),
+        (packValue, effectValue) => packValue - effectValue,
         ({ condition }) =>
           _.isNil(condition) || edgeConditionIsSatisfiable(condition),
-        // if validNewBackpropHorizon contains an edge off of the starting
-        // state, (and implicitly the condition is valid), succeed
         ({ edge: e, condition: cond }) =>
+          // if validNewBackpropHorizon contains an edge off of the starting
+          // state, (and implicitly the condition is valid), succeed
           _.some(
             startingStates,
             (s): boolean =>
@@ -682,8 +676,6 @@ const cleanupCheck = (
   pack: Required<ReturnType<typeof getPackFromPath>>
   // false or cleanup path
 ): false | (typeof allEdges)[number]["name"][] => {
-  const conditionStrippedEdges = edges.map((edge) => _.omit(edge, "condition"));
-
   const initialEdge: SpecialHorizonEdge["edge"] | undefined = _.find(
     edges,
     (e) => e.name === edgeToClean
@@ -695,24 +687,23 @@ const cleanupCheck = (
     { edge: initialEdge, condition: packToCondition(pack) },
   ];
 
-  const conditionIsValid = (condition: HorizonEdgeCondition) =>
+  const unpropagatedConditionPredicate = (condition: HorizonEdgeCondition) =>
     _.isNil(condition) ||
     (_.isBoolean(condition) && condition) ||
     (!_.isBoolean(condition) && edgeConditionIsSatisfiable(condition));
 
   try {
-    const allHorizons = specialBFS(
+    const allHorizons = conditionalPropagationBfs(
       edges,
       CONDITIONAL_CLEANUP_ITER_LIMIT,
       initialBackpropHorizon,
-      (edge) => conditionStrippedEdges.filter((e) => e.from === edge.to),
-      true,
-      conditionIsValid,
-      (cond, resourceEffects) => propagateCondition(cond, resourceEffects),
+      (neighbour) => edges.filter((e) => e.from === neighbour.to),
+      (packValue, effectValue) => packValue + effectValue,
       () => true,
       // if validNewHorizon contains a 0-pack, succeed
       ({ condition: cond }) =>
-        !_.isNil(cond) && _.every(allResources, (r) => verifyCond(0, r, cond))
+        !_.isNil(cond) && _.every(allResources, (r) => verifyCond(0, r, cond)),
+      unpropagatedConditionPredicate
     );
 
     return _.reverse(
