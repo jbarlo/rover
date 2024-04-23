@@ -111,7 +111,7 @@ const bfs = <T>(
   return horizons;
 };
 
-type SpecialHorizonEdge = {
+type ConditionalPropagationBfsHorizonEdge = {
   edge: Pick<
     (typeof allEdges)[number],
     "name" | "resourceEffects" | "to" | "from"
@@ -121,7 +121,7 @@ type SpecialHorizonEdge = {
 const conditionalPropagationBfs = (
   edges: typeof allEdges,
   iterLimit: number,
-  initialHorizon: SpecialHorizonEdge[],
+  initialHorizon: ConditionalPropagationBfsHorizonEdge[],
   getEdgeNeighbours: (
     edge: (typeof allEdges)[number]
   ) => Pick<
@@ -130,11 +130,11 @@ const conditionalPropagationBfs = (
   >[],
   resourceEffectEvaluator: (packValue: number, effectValue: number) => number,
   propagatedNextHorizonValidityPredicate: (
-    horizonElement: SpecialHorizonEdge
+    horizonElement: ConditionalPropagationBfsHorizonEdge
   ) => boolean,
   // if any horizon element passes, succeed. passing results become the final
   // horizon
-  successPredicate: (edge: SpecialHorizonEdge) => boolean,
+  successPredicate: (edge: ConditionalPropagationBfsHorizonEdge) => boolean,
   // if defined, filters by valid conditions before they are propagated
   unpropagatedConditionPredicate?: (condition: HorizonEdgeCondition) => boolean
 ) => {
@@ -147,12 +147,25 @@ const conditionalPropagationBfs = (
   > = _.mapValues(nameKeyedEdges, (edge) => _.cloneDeep(edge.condition));
 
   // TODO make prettyPrint condition order deterministic
-  const serializeHorizonEdge = (edge: SpecialHorizonEdge): string =>
+  const serializeHorizonEdge = (
+    edge: ConditionalPropagationBfsHorizonEdge
+  ): string =>
     `${edge.edge.name}:${
       _.isNil(edge.condition) ? undefined : prettyPrint(edge.condition)
     }`;
 
-  return bfs<SpecialHorizonEdge>(
+  // for every conditionally traversable edge, propagate condition until one of
+  // the following:
+  //   - a horizon element meets the success criteria (succeed)
+  //   - if all conditional edges are invalid (fail early)
+  //   - there are no edges left to propagate to (fail early)
+  //   - some constant number of iterations is reached (fail)
+
+  // propagation on edge A is defined as:
+  //  - if any edge B directionally neighbours edge A, edge B's condition
+  //    becomes its existing condition AND edge A's condition
+
+  return bfs<ConditionalPropagationBfsHorizonEdge>(
     iterLimit,
     initialHorizon,
     (prev) => {
@@ -312,23 +325,8 @@ const naiveSatisfiabilityCheck = (
         horizons: Horizon[];
       }
     >(conditionalEdges, (conditionalEdge) => {
-      // for every conditionally traversable edge, backprop condition until one of the following:
-      //   - a starting state is reached with a condition that passes with an empty state (succeed)
-      //   - if all conditional edges are invalid (fail early)
-      //   - there are no edges left to backprop to (fail early)
-      //   - some constant number of iterations is reached (fail)
-
-      // backpropagation on edge A is defined as:
-      //  - if any edge B points to edge A, edge B's condition becomes its
-      //    existing condition AND edge A's condition
-
       // initialize horizon with conditional edge
-      type HorizonEdge = {
-        edge: typeof conditionalEdge;
-        condition: HorizonEdgeCondition;
-      };
-
-      const initialBackpropHorizon: HorizonEdge[] = [
+      const initialBackpropHorizon: ConditionalPropagationBfsHorizonEdge[] = [
         {
           edge: conditionalEdge,
           condition: _.cloneDeep(initialEdgeConditionMap[conditionalEdge.name]),
@@ -676,14 +674,12 @@ const cleanupCheck = (
   pack: Required<ReturnType<typeof getPackFromPath>>
   // false or cleanup path
 ): false | (typeof allEdges)[number]["name"][] => {
-  const initialEdge: SpecialHorizonEdge["edge"] | undefined = _.find(
-    edges,
-    (e) => e.name === edgeToClean
-  );
+  const initialEdge: ConditionalPropagationBfsHorizonEdge["edge"] | undefined =
+    _.find(edges, (e) => e.name === edgeToClean);
 
   if (_.isNil(initialEdge)) throw new Error("Edge not found");
 
-  const initialBackpropHorizon: SpecialHorizonEdge[] = [
+  const initialBackpropHorizon: ConditionalPropagationBfsHorizonEdge[] = [
     { edge: initialEdge, condition: packToCondition(pack) },
   ];
 

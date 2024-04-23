@@ -3,7 +3,10 @@
     "backprop",
     "backpropagation",
     "backpropped",
+    "neighbour",
+    "neighbours",
     "satisfiability",
-    "snapshotting"
+    "snapshotting",
+    "unpropagated"
   ]
 }
