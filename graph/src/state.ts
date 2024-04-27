@@ -23,14 +23,8 @@ export const edges = createEdges(
       name: "1-self-loop-x2",
       resourceEffects: { apples: 2 },
       condition: { resource: "apples", value: 4, operator: "gt" },
-      prep: () => {
-        console.log("prep 1-self-loop");
-      },
       action: () => {
-        console.log("1-self-loop");
-      },
-      cleanup: () => {
-        console.log("cleanup 1-self-loop");
+        console.log("1-self-loop-x2");
       },
     },
     {
@@ -38,14 +32,8 @@ export const edges = createEdges(
       to: "1",
       name: "1-self-loop",
       resourceEffects: { apples: 1 },
-      prep: () => {
-        console.log("prep 1-self-loop");
-      },
       action: () => {
         console.log("1-self-loop");
-      },
-      cleanup: () => {
-        console.log("cleanup 1-self-loop");
       },
     },
     {
@@ -53,14 +41,8 @@ export const edges = createEdges(
       to: "2",
       name: "go-to-2",
       condition: { resource: "apples", value: 14, operator: "gt" },
-      prep: () => {
-        console.log("prep go-to-2");
-      },
       action: () => {
         console.log("go-to-2");
-      },
-      cleanup: () => {
-        console.log("cleanup go-to-2");
       },
     },
     {

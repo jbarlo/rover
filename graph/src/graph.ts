@@ -48,9 +48,7 @@ interface BaseEdge<
   // should be performable via UI.
   // the graph should be able to determine what resources are needed for each action,
   // then a prep path can be automatically generated before execution
-  prep?: () => void;
   action: () => void;
-  cleanup?: () => void;
   virtual?: boolean;
 }
 

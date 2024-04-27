@@ -247,8 +247,6 @@ const conditionalPropagationBfs = (
         // FIXME inefficient
         _.some(validNextHorizon, (horizonEdge) => successPredicate(horizonEdge))
       ) {
-        console.log("Conditional Edge Succeeded");
-
         return {
           endWithoutChecking: true,
           // record edges that are off of starting states and have valid
@@ -771,20 +769,18 @@ const runScheduler = (
   states: typeof allStates,
   edges: typeof allEdges
 ): Step[] => {
-  console.log("Running Scheduler");
-  // TODO new scheduler
-  // determine starting states from urls
-  // create implied edges from starting states to all other states
-  // ensure all edges are traversable from starting states. conditional edges, etc
+  console.log("Validating graph traversability");
   if (traversabilityCheck(states, edges) === false) {
     throw new Error("Some states are unreachable");
   }
   // automatically calculate prep and cleanup paths to resolve effects
+  console.log("Validating graph satisfiability");
   const satisfiabilityCheckResult = naiveSatisfiabilityCheck(states, edges);
   if (satisfiabilityCheckResult === false) {
     // TODO actually say what's unsatisfiable
     throw new Error("Some conditions are unsatisfiable");
   }
+  console.log("Calculating conditional paths");
   const conditionalPaths = _.map(satisfiabilityCheckResult, (result) => ({
     edgeName: result.conditionalEdge,
     path: traceValidPathThroughHorizons(
@@ -794,20 +790,11 @@ const runScheduler = (
     ),
   }));
 
-  console.log(JSON.stringify(conditionalPaths));
-
   console.log("Calculating non-conditional paths");
   const nonConditionalPaths = getNonConditionalPaths(
     states,
     edges,
     conditionalPaths
-  );
-  console.log(JSON.stringify(nonConditionalPaths));
-
-  console.log(
-    JSON.stringify(
-      _.map(nonConditionalPaths, (path) => getPackFromPath(path.path, edges))
-    )
   );
 
   // TODO effectful implicit nav edges: add all implicit state -> starting state
@@ -833,32 +820,58 @@ const runScheduler = (
     }
   );
 
-  console.log(JSON.stringify(cleanupRoutes));
   const nonRedundantRoutes = getNonRedundantRoutes(cleanupRoutes);
-  console.log(JSON.stringify(nonRedundantRoutes));
 
-  // TODO
-  return [];
+  // label each step as prep, action, or cleanup.
+  // - if an edge would be prep, but has never been traversed, call it an
+  //   action. the actual route has been labeled redundant
+  const edgeTraversed = _.mapValues(
+    _.keyBy(edges, "name"),
+    () => false
+  ) as Record<(typeof allEdges)[number]["name"], boolean>;
+
+  return _.flatMap(nonRedundantRoutes, (route) => [
+    ..._.map(route.preparationPath, (e) => {
+      const edgeUntraversed = !edgeTraversed[e];
+      if (edgeUntraversed) edgeTraversed[e] = true;
+      return {
+        edgeName: e,
+        type: edgeUntraversed ? ("action" as const) : ("prep" as const),
+      };
+    }),
+    {
+      edgeName: route.edgeName,
+      type: "action" as const,
+    },
+    ..._.map(route.cleanupPath, (e) => ({
+      edgeName: e,
+      type: "cleanup" as const,
+    })),
+  ]);
 };
 
 const runSteps = (steps: Step[], edges: typeof allEdges) => {
   // run each edge's prep, action, and cleanup -- do snapshotting, etc
   _.forEach(steps, (step) => {
     const edge = edges.find((e) => e.name === step.edgeName)!;
-    if (_.isNil(edge)) return true; // continue
-    edge[step.type]?.();
+    if (_.isNil(edge)) throw new Error("Edge not found");
+    edge.action();
   });
 };
 
 async function main() {
   console.log("Starting");
   try {
+    console.log("Validating graph format");
     parseGraphValidity(allStates, allEdges);
 
+    console.log("Running Scheduler");
     const steps = runScheduler(allStates, allEdges);
+    console.log("Scheduler Complete!");
 
+    console.log("Running...");
     runSteps(steps, allEdges);
-    console.log("Complete!");
+    console.log("Done");
   } catch (e) {
     console.error(e);
   }
