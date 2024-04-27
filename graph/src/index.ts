@@ -729,6 +729,43 @@ const getCleanupPath = (
   }
 };
 
+interface Route {
+  edgeName: (typeof allEdges)[number]["name"];
+  // drop last path element since it's the edge to clean
+  preparationPath: (typeof allEdges)[number]["name"][];
+  cleanupPath: (typeof allEdges)[number]["name"][];
+}
+
+const getNonRedundantRoutes = (routes: Route[]): Route[] => {
+  const keyedRoutes = _.keyBy(routes, "edgeName");
+  const orderedStringifiedRoutes = _.orderBy(
+    routes,
+    (r) => r.preparationPath.length,
+    "asc"
+  ).map((r) => ({
+    edgeName: r.edgeName,
+    // TODO does this risk nonescaped shenanigans?
+    preparationPath: [...r.preparationPath, r.edgeName].join(","),
+  }));
+
+  const nonredundantRoutes: Route[] = [];
+  _.forEach(orderedStringifiedRoutes, (route, i) => {
+    if (
+      _.every(_.range(i + 1, orderedStringifiedRoutes.length), (j) => {
+        const otherRoute = orderedStringifiedRoutes[j];
+        if (_.isNil(otherRoute)) return true; // ignore
+        return !otherRoute.preparationPath.includes(route.preparationPath);
+      })
+    ) {
+      const nonredundantRoute = keyedRoutes[route.edgeName];
+      if (_.isNil(nonredundantRoute)) return true; // continue
+      nonredundantRoutes.push(nonredundantRoute);
+    }
+  });
+
+  return nonredundantRoutes;
+};
+
 // produce a list of edge action and cleanup steps that trace a path through the graph
 const runScheduler = (
   states: typeof allStates,
@@ -776,23 +813,29 @@ const runScheduler = (
   // TODO effectful implicit nav edges: add all implicit state -> starting state
   // edges to calculate complete paths
 
-  const cleanupPaths = _.map(
+  const cleanupRoutes: Route[] = _.map(
     [...conditionalPaths, ...nonConditionalPaths],
-    (path, i) => {
+    (path) => {
+      const cleanupPath = getCleanupPath(
+        edges,
+        path.edgeName,
+        getPackFromPath(path.path, edges)
+      );
+      if (cleanupPath === false) {
+        throw new Error(`No cleanup path found for: ${path}`);
+      }
       return {
         edgeName: path.edgeName,
         // drop last path element since it's the edge to clean
         preparationPath: _.initial(path.path),
-        cleanupPath: getCleanupPath(
-          edges,
-          path.edgeName,
-          getPackFromPath(path.path, edges)
-        ),
+        cleanupPath,
       };
     }
   );
 
-  console.log(JSON.stringify(cleanupPaths));
+  console.log(JSON.stringify(cleanupRoutes));
+  const nonRedundantRoutes = getNonRedundantRoutes(cleanupRoutes);
+  console.log(JSON.stringify(nonRedundantRoutes));
 
   // TODO
   return [];
