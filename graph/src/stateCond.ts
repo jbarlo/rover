@@ -1,7 +1,6 @@
-import { ResourceEffects } from "./graph.js";
+import { EdgeCondition, ResourceEffects } from "./graph.js";
 import {
   Cond,
-  UnwrapCond,
   combineCond,
   condIsLeaf,
   evaluateCond,
@@ -11,14 +10,10 @@ import {
   mapCondArr,
   prettyPrintEdgeCondition,
 } from "./cond.js";
-import { edges as allEdges } from "./state.js";
 import _ from "lodash";
 
-export type EdgeConditionWithResource = UnwrapCond<
-  NonNullable<(typeof allEdges)[number]["condition"]>
->;
-export const prettyPrint = (
-  condition: Cond<EdgeConditionWithResource | boolean>
+export const prettyPrint = <R extends string>(
+  condition: Cond<EdgeCondition<R> | boolean>
 ) =>
   prettyPrintEdgeCondition(condition, (c) =>
     _.isBoolean(c)
@@ -26,13 +21,11 @@ export const prettyPrint = (
       : `${c.operator === "gt" ? ">" : "<"} ${c.value} ${c.resource}`
   );
 
-export const propagateCondition = (
-  cond: Cond<EdgeConditionWithResource | boolean>,
-  resourceEffects:
-    | ResourceEffects<EdgeConditionWithResource["resource"]>
-    | undefined,
+export const propagateCondition = <R extends string>(
+  cond: Cond<EdgeCondition<R> | boolean>,
+  resourceEffects: ResourceEffects<R> | undefined,
   propagate: (packValue: number, effectValue: number) => number
-): Cond<EdgeConditionWithResource | boolean> => {
+): Cond<EdgeCondition<R> | boolean> => {
   return mapCond(cond, (c) => {
     if (_.isBoolean(c) || _.isNil(resourceEffects)) return c;
     const resourceEffect: number | undefined = resourceEffects[c.resource];
@@ -41,10 +34,10 @@ export const propagateCondition = (
   });
 };
 
-export const verifyCond = (
+export const verifyCond = <R extends string>(
   value: number,
-  resource: EdgeConditionWithResource["resource"],
-  cond: Cond<EdgeConditionWithResource | boolean>
+  resource: R,
+  cond: Cond<EdgeCondition<R> | boolean>
 ): boolean =>
   evaluateCond(cond, (c) => {
     if (_.isBoolean(c)) return c;
@@ -55,19 +48,13 @@ export const verifyCond = (
     return true;
   });
 
-export const edgeConditionIsSatisfiable = (
-  cond: Cond<EdgeConditionWithResource | boolean>
+export const edgeConditionIsSatisfiable = <R extends string>(
+  cond: Cond<EdgeCondition<R> | boolean>
 ): boolean => {
-  const flattenedConditions: (EdgeConditionWithResource | boolean)[] =
-    flattenCond(cond);
+  const flattenedConditions: (EdgeCondition<R> | boolean)[] = flattenCond(cond);
 
-  const sets: Partial<
-    Record<EdgeConditionWithResource["resource"], Set<number>>
-  > = {};
-  const addToSet = (
-    resource: EdgeConditionWithResource["resource"],
-    value: number
-  ) => {
+  const sets: Partial<Record<R, Set<number>>> = {};
+  const addToSet = (resource: R, value: number) => {
     if (!sets[resource]) sets[resource] = new Set();
     sets[resource]?.add(value);
   };
@@ -90,17 +77,7 @@ export const edgeConditionIsSatisfiable = (
         finalShiftedUpOne,
       ]);
 
-      if (
-        _.every(
-          testValues,
-          (v) =>
-            !verifyCond(
-              v,
-              resource as EdgeConditionWithResource["resource"],
-              cond
-            )
-        )
-      ) {
+      if (_.every(testValues, (v) => !verifyCond(v, resource as R, cond))) {
         throw new Error("Invalid condition");
       }
     });
@@ -111,15 +88,15 @@ export const edgeConditionIsSatisfiable = (
   return true;
 };
 
-export type HorizonEdgeCondition =
-  | Cond<EdgeConditionWithResource | boolean>
+export type HorizonEdgeCondition<R extends string> =
+  | Cond<EdgeCondition<R> | boolean>
   | undefined;
 
 // TODO test
 // TODO determine numeric ranges and reconstruct a cond
-export const simplifyHorizonEdgeCond = (
-  cond: HorizonEdgeCondition
-): HorizonEdgeCondition => {
+export const simplifyHorizonEdgeCond = <R extends string>(
+  cond: HorizonEdgeCondition<R>
+): HorizonEdgeCondition<R> => {
   if (_.isNil(cond)) return undefined;
 
   const combinedCond = combineCond(cond);
@@ -134,13 +111,10 @@ export const simplifyHorizonEdgeCond = (
           // resource. if a value is defined, values *beyond* that value are
           // valid. if a resource is not defined, all values are valid.
           const bounds: Partial<
-            Record<
-              EdgeConditionWithResource["resource"],
-              { highest: number; lowest: number }
-            >
+            Record<R, { highest: number; lowest: number }>
           > = {};
           const setBoundary = (
-            resource: EdgeConditionWithResource["resource"],
+            resource: R,
             type: "high" | "low",
             value: number
           ) => {
@@ -202,14 +176,10 @@ export const simplifyHorizonEdgeCond = (
         // defines the highest and lowest valid value boundary for each
         // resource. all values *outside* of that boundary are valid. if a
         // resource is not defined, no values are valid.
-        const bounds: Partial<
-          Record<
-            EdgeConditionWithResource["resource"],
-            { highest: number; lowest: number }
-          >
-        > = {};
+        const bounds: Partial<Record<R, { highest: number; lowest: number }>> =
+          {};
         const setBoundary = (
-          resource: EdgeConditionWithResource["resource"],
+          resource: R,
           type: "high" | "low",
           value: number
         ) => {

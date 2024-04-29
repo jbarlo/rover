@@ -103,5 +103,3 @@ export const prettyPrintEdgeCondition = <T>(
       .join(" || ")})`;
   return printer(cond);
 };
-
-export type UnwrapCond<T> = T extends Cond<infer U> ? U : never;

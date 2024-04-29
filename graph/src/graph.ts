@@ -1,7 +1,7 @@
 import _ from "lodash";
 import { Cond } from "./cond.js";
 
-interface State<ID extends string> {
+export interface State<ID extends string> {
   id: ID;
   // the state's canonical url, if it exists
   // TODO find a way to handle *static-er* slugs
@@ -13,21 +13,15 @@ export const createStates = <ID extends string>(states: State<ID>[]) => {
   return states;
 };
 
-type ParseIdFromStates<T extends State<string>[]> = T[number] extends State<
-  infer ID
->
+type ParseIdFromState<T extends State<string>> = T extends State<infer ID>
   ? ID
   : never;
 
-type DefinedEdgeCondition<Resource extends string> = {
+export type EdgeCondition<Resource extends string> = {
   resource: Resource;
   value: number;
   operator: "lt" | "gt";
 };
-
-type EdgeCondition<Resource extends string | null> = Resource extends string
-  ? Cond<DefinedEdgeCondition<Resource>>
-  : undefined;
 
 export type ResourceEffects<R extends string> = Partial<Record<R, number>>;
 
@@ -43,7 +37,9 @@ interface BaseEdge<
   resourceEffects?: Resource extends string
     ? ResourceEffects<Resource>
     : undefined;
-  condition?: EdgeCondition<Resource>;
+  condition?: Resource extends string
+    ? Cond<EdgeCondition<Resource>>
+    : undefined;
   // TODO -- very inefficient to define reusable prep and cleanup since nav and effects
   // should be performable via UI.
   // the graph should be able to determine what resources are needed for each action,
@@ -56,7 +52,7 @@ export type Edges<
   EdgeName extends string,
   States extends State<string>[],
   Resource extends string | null = null
-> = BaseEdge<EdgeName, ParseIdFromStates<States>, Resource>[];
+> = BaseEdge<EdgeName, ParseIdFromState<States[number]>, Resource>[];
 
 export const createEdges = <
   EdgeName extends string,
@@ -69,3 +65,9 @@ export const createEdges = <
 ) => {
   return edges;
 };
+
+// TODO nice things for a monad -- all clones of the actual underlying
+// - keyed edges -- with 1-to-1 guarantees
+// - keyed states -- with 1-to-1 guarantees
+// - starting states (keyed maybe)
+// - all resources
