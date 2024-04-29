@@ -4,7 +4,8 @@
   "sideEffects": false,
   "scripts": {
     "start": "node --loader ts-node/esm ./src/index.ts",
-    "typecheck": "tsc"
+    "typecheck": "tsc",
+    "test": "vitest"
   },
   "engines": {
     "node": ">=14.0.0"
@@ -16,6 +17,7 @@
     "@types/lodash": "^4.14.202",
     "@types/node": "^20.11.17",
     "ts-node": "^10.9.1",
-    "typescript": "^5.1.6"
+    "typescript": "^5.1.6",
+    "vitest": "^1.5.2"
   }
 }
