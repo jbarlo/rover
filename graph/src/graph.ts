@@ -56,7 +56,8 @@ export type Edges<
 
 export const createEdges = <
   EdgeName extends string,
-  States extends State<string>,
+  StateId extends string,
+  States extends State<StateId>,
   Resource extends string | undefined = undefined
 >(
   edges: Edges<
@@ -64,7 +65,7 @@ export const createEdges = <
     States[],
     Resource extends undefined ? null : Resource
   >,
-  states: States,
+  states: States[],
   resources?: Resource[]
 ) => {
   return edges;
