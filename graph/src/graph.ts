@@ -56,18 +56,49 @@ export type Edges<
 
 export const createEdges = <
   EdgeName extends string,
-  States extends State<string>[],
+  States extends State<string>,
   Resource extends string | undefined = undefined
 >(
-  edges: Edges<EdgeName, States, Resource extends undefined ? null : Resource>,
+  edges: Edges<
+    EdgeName,
+    States[],
+    Resource extends undefined ? null : Resource
+  >,
   states: States,
   resources?: Resource[]
 ) => {
   return edges;
 };
 
-// TODO nice things for a monad -- all clones of the actual underlying
+// TODO nice things for a not a monad -- all clones of the actual underlying
 // - keyed edges -- with 1-to-1 guarantees
 // - keyed states -- with 1-to-1 guarantees
 // - starting states (keyed maybe)
 // - all resources
+
+export interface Graph<
+  StateId extends string,
+  S extends State<StateId>,
+  EdgeName extends string,
+  Resource extends string
+> {
+  getEdges: () => Edges<EdgeName, S[], Resource>;
+  getStates: () => S[];
+  getResources: () => Resource[];
+}
+export const initGraph: <
+  StateId extends string,
+  S extends State<StateId>,
+  EdgeName extends string,
+  Resource extends string
+>(
+  states: S[],
+  edges: Edges<EdgeName, S[], Resource>,
+  resources: Resource[]
+) => Graph<StateId, S, EdgeName, Resource> = (states, edges, resources) => {
+  return {
+    getEdges: () => _.cloneDeep(edges),
+    getStates: () => _.cloneDeep(states),
+    getResources: () => _.cloneDeep(resources),
+  };
+};

@@ -1,5 +1,4 @@
 import { Cond, combineCond } from "./cond.js";
-import { resources as allResources } from "./state.js";
 import _ from "lodash";
 import {
   HorizonEdgeCondition,
@@ -14,7 +13,7 @@ import {
   CONDITIONAL_ITER_LIMIT,
   NONCONDITIONAL_PATH_LIMIT,
 } from "./constants.js";
-import { EdgeCondition, Edges, State } from "./graph.js";
+import { EdgeCondition, Edges, Graph, State } from "./graph.js";
 
 const getStartingStates = <StateId extends string, S extends State<StateId>>(
   states: S[]
@@ -27,9 +26,11 @@ const traversabilityCheck = <
   EdgeName extends string,
   Resource extends string
 >(
-  states: S[],
-  edges: Edges<EdgeName, S[], Resource>
+  graph: Graph<StateId, S, EdgeName, Resource>
 ) => {
+  const states = graph.getStates();
+  const edges = graph.getEdges();
+
   const startingStates = getStartingStates(states);
   if (startingStates.length === 0) return false;
 
@@ -311,14 +312,16 @@ const naiveSatisfiabilityCheck = <
   EdgeName extends string,
   Resource extends string
 >(
-  states: S[],
-  edges: Edges<EdgeName, S[], Resource>
+  graph: Graph<StateId, S, EdgeName, Resource>
 ):
   | {
       conditionalEdge: EdgeName;
       horizons: Horizon<EdgeName, Resource>[];
     }[]
   | false => {
+  const states: S[] = graph.getStates();
+  const edges: Edges<EdgeName, S[], Resource> = graph.getEdges();
+  const allResources = graph.getResources();
   // `keyBy` doesn't preserve string literals since the input may not contain
   // all possible keys, but all edges are provided here.
   // TODO associate this with the createEdges function
@@ -416,10 +419,12 @@ const traceValidPathThroughHorizons = <
   EdgeName extends string,
   R extends string
 >(
-  edges: Edges<EdgeName, S[], R>,
+  graph: Graph<StateId, S, EdgeName, R>,
   horizons: Horizon<EdgeName, R>[],
   updatePackTo: (packValue: number, effectValue: number) => number
 ): EdgeName[] => {
+  const edges = graph.getEdges();
+  const allResources = graph.getResources();
   const effectPack: Partial<Record<R, number>> = {};
   const addToPack = (resource: R, value: number | undefined) => {
     effectPack[resource] = updatePackTo(effectPack[resource] ?? 0, value ?? 0);
@@ -455,16 +460,12 @@ const getNonConditionalPaths = <
   EdgeName extends string,
   Resource extends string
 >(
-  states: S[],
-  edges: Edges<EdgeName, S[], Resource>,
-  conditionalEdgePaths: {
-    edgeName: EdgeName;
-    path: ReturnType<typeof traceValidPathThroughHorizons>;
-  }[]
-): {
-  edgeName: EdgeName;
-  path: ReturnType<typeof traceValidPathThroughHorizons>;
-}[] => {
+  graph: Graph<StateId, S, EdgeName, Resource>,
+  conditionalEdgePaths: { edgeName: EdgeName; path: EdgeName[] }[]
+): { edgeName: EdgeName; path: EdgeName[] }[] => {
+  const states = graph.getStates();
+  const edges = graph.getEdges();
+
   // for every nonconditional edge, determine path to a starting state using
   // conditional edges
   const startingStates = getStartingStates(states);
@@ -497,14 +498,7 @@ const getNonConditionalPaths = <
       }
 
       const conditionalEdgeFound: Partial<
-        Record<
-          EdgeName,
-          {
-            pathToNonConditional: ReturnType<
-              typeof traceValidPathThroughHorizons
-            >;
-          }
-        >
+        Record<EdgeName, { pathToNonConditional: EdgeName[] }>
       > = {};
 
       const checkHorizonForConditionalEdge = (horizon: EdgeName[]) => {
@@ -596,7 +590,7 @@ const getNonConditionalPaths = <
               _.isNil(val)
                 ? undefined
                 : {
-                    edgeName: edgeName as keyof typeof conditionalEdgeFound,
+                    edgeName: edgeName as EdgeName, // TODO typing
                     pathToNonConditional: val.pathToNonConditional,
                   }
             )
@@ -636,9 +630,12 @@ const getPackFromPath = <
   R extends string
 >(
   path: EdgeName[],
-  edges: Edges<EdgeName, S[], R>,
+  graph: Graph<StateId, S, EdgeName, R>,
   initialPack?: Partial<Record<R, number>>
 ): Record<R, number> => {
+  const edges = graph.getEdges();
+  const allResources = graph.getResources();
+
   const pack: Partial<Record<R, number>> = initialPack ?? {};
 
   const addToPack = (
@@ -668,7 +665,7 @@ const getPackFromPath = <
 };
 
 const packToCondition = <R extends string>(
-  pack: Required<ReturnType<typeof getPackFromPath>>
+  pack: Record<R, number>
 ): Cond<EdgeCondition<R>> => ({
   _and: _.flatMap<typeof pack, Cond<EdgeCondition<R>>>(
     pack,
@@ -676,11 +673,13 @@ const packToCondition = <R extends string>(
       if (_.isNil(val)) return [];
       return [
         {
+          // TODO typing
           resource: resource as R,
           value: val - 1,
           operator: "gt",
         },
         {
+          // TODO typing
           resource: resource as R,
           value: val + 1,
           operator: "lt",
@@ -696,11 +695,14 @@ const getCleanupPath = <
   EdgeName extends string,
   R extends string
 >(
-  edges: Edges<EdgeName, S[], R>,
+  graph: Graph<StateId, S, EdgeName, R>,
   edgeToClean: EdgeName,
-  pack: Required<ReturnType<typeof getPackFromPath>>
+  pack: Record<R, number>
   // false or cleanup path
 ): false | EdgeName[] => {
+  const edges = graph.getEdges();
+  const allResources = graph.getResources();
+
   const initialEdge:
     | ConditionalPropagationBfsHorizonEdge<StateId, S, EdgeName, R>["edge"]
     | undefined = _.find(edges, (e) => e.name === edgeToClean);
@@ -709,7 +711,7 @@ const getCleanupPath = <
 
   const initialCond = packToCondition(pack);
 
-  const condIsSuccessful = <R extends string>(cond: HorizonEdgeCondition<R>) =>
+  const condIsSuccessful = (cond: HorizonEdgeCondition<R>) =>
     !_.isNil(cond) && _.every(allResources, (r) => verifyCond(0, r, cond));
 
   if (condIsSuccessful(initialCond)) return []; // done early!
@@ -743,7 +745,7 @@ const getCleanupPath = <
 
     return _.reverse(
       traceValidPathThroughHorizons(
-        edges,
+        graph,
         // ignore first element since it's the edge to clean
         _.tail(allHorizons).map((horizon) =>
           horizon.map((edge) => ({
@@ -811,16 +813,15 @@ export const runScheduler = <
   EdgeName extends string,
   Resource extends string
 >(
-  states: S[],
-  edges: Edges<EdgeName, S[], Resource>
+  graph: Graph<StateId, S, EdgeName, Resource>
 ): Step[] => {
   console.log("Validating graph traversability");
-  if (traversabilityCheck(states, edges) === false) {
+  if (traversabilityCheck(graph) === false) {
     throw new Error("Some states are unreachable");
   }
   // automatically calculate prep and cleanup paths to resolve effects
   console.log("Validating graph satisfiability");
-  const satisfiabilityCheckResult = naiveSatisfiabilityCheck(states, edges);
+  const satisfiabilityCheckResult = naiveSatisfiabilityCheck(graph);
   if (satisfiabilityCheckResult === false) {
     // TODO actually say what's unsatisfiable
     throw new Error("Some conditions are unsatisfiable");
@@ -829,18 +830,14 @@ export const runScheduler = <
   const conditionalPaths = _.map(satisfiabilityCheckResult, (result) => ({
     edgeName: result.conditionalEdge,
     path: traceValidPathThroughHorizons(
-      edges,
+      graph,
       result.horizons,
       (packValue, effectValue) => packValue + effectValue
     ),
   }));
 
   console.log("Calculating non-conditional paths");
-  const nonConditionalPaths = getNonConditionalPaths(
-    states,
-    edges,
-    conditionalPaths
-  );
+  const nonConditionalPaths = getNonConditionalPaths(graph, conditionalPaths);
 
   // TODO effectful implicit nav edges: add all implicit state -> starting state
   // edges to calculate complete paths
@@ -849,9 +846,9 @@ export const runScheduler = <
     [...conditionalPaths, ...nonConditionalPaths],
     (path) => {
       const cleanupPath = getCleanupPath(
-        edges,
+        graph,
         path.edgeName,
-        getPackFromPath(path.path, edges)
+        getPackFromPath(path.path, graph)
       );
       if (cleanupPath === false) {
         throw new Error(`No cleanup path found for: ${path}`);
@@ -866,6 +863,8 @@ export const runScheduler = <
   );
 
   const nonRedundantRoutes = getNonRedundantRoutes(cleanupRoutes);
+
+  const edges = graph.getEdges();
 
   // label each step as prep, action, or cleanup.
   // - if an edge would be prep, but has never been traversed, call it an

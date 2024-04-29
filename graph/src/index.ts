@@ -1,9 +1,17 @@
+import { Graph, initGraph } from "./graph.js";
 import { runScheduler } from "./scheduler.js";
-import { states as allStates, edges as allEdges } from "./state.js";
+import {
+  states as allStates,
+  edges as allEdges,
+  resources as allResources,
+} from "./state.js";
 import _ from "lodash";
 
 // TODO zod
-const parseGraphValidity = (s: typeof allStates, e: typeof allEdges) => {
+// TODO integrate with initGraph
+const parseGraphValidity = (graph: Graph<any, any, any, any>) => {
+  const s = graph.getStates();
+  const e = graph.getEdges();
   if (s.length !== _.uniqBy(s, "id").length) {
     throw new Error("Duplicate state IDs");
   }
@@ -33,11 +41,12 @@ const runSteps = (steps: Step[], edges: typeof allEdges) => {
 async function main() {
   console.log("Starting");
   try {
+    const graph = initGraph(allStates, allEdges, allResources);
     console.log("Validating graph format");
-    parseGraphValidity(allStates, allEdges);
+    parseGraphValidity(graph);
 
     console.log("Running Scheduler");
-    const steps = runScheduler(allStates, allEdges);
+    const steps = runScheduler(graph);
     console.log("Scheduler Complete!");
 
     console.log("Running...");
