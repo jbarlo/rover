@@ -1,5 +1,5 @@
-import { Graph, initGraph } from "./graph.js";
-import { runScheduler } from "./scheduler.js";
+import { Edges, Graph, State, initGraph } from "./graph.js";
+import { Step, runScheduler } from "./scheduler.js";
 import {
   states as allStates,
   edges as allEdges,
@@ -24,12 +24,15 @@ const parseGraphValidity = (graph: Graph<any, any, any, any>) => {
   // should URLs and startingness be separate? maybe URLs as groups?x
 };
 
-interface Step {
-  edgeName: string;
-  type: "prep" | "action" | "cleanup";
-}
-
-const runSteps = (steps: Step[], edges: typeof allEdges) => {
+const runSteps = <
+  StateId extends string,
+  S extends State<StateId>,
+  EdgeName extends string,
+  Resource extends string
+>(
+  steps: Step<EdgeName>[],
+  edges: Edges<EdgeName, S[], Resource>
+) => {
   // run each edge's prep, action, and cleanup -- do snapshotting, etc
   _.forEach(steps, (step) => {
     const edge = edges.find((e) => e.name === step.edgeName)!;
@@ -37,6 +40,10 @@ const runSteps = (steps: Step[], edges: typeof allEdges) => {
     edge.action();
   });
 };
+
+// TODO NEXT: stitch cleanup paths together across multiple starting states if
+// needed
+//  - ensure all prep paths start from a starting state
 
 async function main() {
   console.log("Starting");
@@ -47,6 +54,7 @@ async function main() {
 
     console.log("Running Scheduler");
     const steps = runScheduler(graph);
+    console.log(JSON.stringify(steps, null, 2));
     console.log("Scheduler Complete!");
 
     console.log("Running...");

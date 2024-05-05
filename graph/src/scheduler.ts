@@ -801,8 +801,8 @@ const getNonRedundantRoutes = <EdgeName extends string>(
   return nonredundantRoutes;
 };
 
-interface Step {
-  edgeName: string;
+export interface Step<EdgeName extends string> {
+  edgeName: EdgeName;
   type: "prep" | "action" | "cleanup";
 }
 
@@ -814,7 +814,7 @@ export const runScheduler = <
   Resource extends string
 >(
   graph: Graph<StateId, S, EdgeName, Resource>
-): Step[] => {
+): Step<EdgeName>[] => {
   console.log("Validating graph traversability");
   if (traversabilityCheck(graph) === false) {
     throw new Error("Some states are unreachable");
