@@ -300,25 +300,97 @@ const conditionalPropagationBfs = <
   );
 };
 
+const calculateIsNeighbour = <
+  StateId extends string,
+  S extends State<StateId>,
+  EdgeName extends string,
+  R extends string
+>(
+  prevName: EdgeName | null,
+  currName: EdgeName,
+  keyedEdges: Record<EdgeName, Edges<EdgeName, S[], R>[number]>,
+  isNeighbour: (
+    prevEdge: Edges<EdgeName, S[], R>[number],
+    currEdge: Edges<EdgeName, S[], R>[number]
+  ) => boolean
+): boolean => {
+  if (_.isNil(prevName)) return true;
+  const prev = keyedEdges[prevName];
+  const curr = keyedEdges[currName];
+  if (_.isNil(prev) || _.isNil(curr)) throw new Error("Edge not found");
+  return isNeighbour(prev, curr);
+};
+const traceValidPathThroughHorizons = <
+  StateId extends string,
+  S extends State<StateId>,
+  EdgeName extends string,
+  R extends string
+>(
+  graph: Graph<StateId, S, EdgeName, R>,
+  horizons: Horizon<EdgeName, R>[],
+  isNeighbour: Parameters<typeof calculateIsNeighbour>[3],
+  updatePackTo: (packValue: number, effectValue: number) => number
+): EdgeName[] => {
+  const edges = graph.getEdges();
+  // TODO typing
+  const keyedEdges = _.keyBy(edges, "name") as Record<
+    EdgeName,
+    (typeof edges)[number]
+  >;
+  const allResources = graph.getResources();
+  const effectPack: Partial<Record<R, number>> = {};
+  const addToPack = (resource: R, value: number | undefined) => {
+    effectPack[resource] = updatePackTo(effectPack[resource] ?? 0, value ?? 0);
+  };
+
+  const reversedHorizons = _.reverse(_.cloneDeep(horizons));
+
+  let previousEdgeName: EdgeName | null = null;
+  return _.map(reversedHorizons, (horizon) => {
+    const validEdges = _.filter(horizon, (edge) => {
+      const cond = edge.condition;
+
+      return (
+        calculateIsNeighbour(
+          previousEdgeName,
+          edge.name,
+          keyedEdges,
+          isNeighbour
+        ) &&
+        (_.isNil(cond) ||
+          _.every(allResources, (r) => verifyCond(effectPack[r] ?? 0, r, cond)))
+      );
+    });
+    // TODO track multiple valid routes?
+    const validEdge = _.first(validEdges);
+    if (_.isNil(validEdge)) throw new Error("Horizons not traversable");
+
+    _.forEach(
+      _.find(edges, (e) => e.name === validEdge.name)?.resourceEffects,
+      // TODO proper typing
+      (val, res) => addToPack(res as R, val)
+    );
+
+    previousEdgeName = validEdge.name;
+
+    return validEdge.name;
+  });
+};
+
 // Check if all conditional edges have some route from a starting state that
-// satisfies their conditions
+// satisfies their conditions. If not, return false
 type Horizon<EdgeName extends string, R extends string> = {
   name: EdgeName;
   condition: HorizonEdgeCondition<R>;
 }[];
-const naiveSatisfiabilityCheck = <
+export const getConditionalPaths = <
   StateId extends string,
   S extends State<StateId>,
   EdgeName extends string,
   Resource extends string
 >(
   graph: Graph<StateId, S, EdgeName, Resource>
-):
-  | {
-      conditionalEdge: EdgeName;
-      horizons: Horizon<EdgeName, Resource>[];
-    }[]
-  | false => {
+): { edgeName: EdgeName; path: EdgeName[] }[] | false => {
   const states: S[] = graph.getStates();
   const edges: Edges<EdgeName, S[], Resource> = graph.getEdges();
   const allResources = graph.getResources();
@@ -339,11 +411,8 @@ const naiveSatisfiabilityCheck = <
   try {
     const everyConditionalEdgesHorizons = _.map<
       (typeof conditionalEdges)[number],
-      {
-        conditionalEdge: EdgeName;
-        horizons: Horizon<EdgeName, Resource>[];
-      }
-    >(conditionalEdges, (conditionalEdge) => {
+      { edgeName: EdgeName; path: EdgeName[] }
+    >(conditionalEdges, (conditionalEdge, i) => {
       // initialize horizon with conditional edge
       const initialBackpropHorizon: ConditionalPropagationBfsHorizonEdge<
         StateId,
@@ -377,13 +446,20 @@ const naiveSatisfiabilityCheck = <
           )
       );
 
+      const horizons = _.map(allHorizons, (horizon) =>
+        _.map(horizon, (h) => ({
+          name: h.edge.name,
+          condition: h.condition,
+        }))
+      );
+
       return {
-        conditionalEdge: conditionalEdge.name,
-        horizons: _.map(allHorizons, (horizon) =>
-          _.map(horizon, (h) => ({
-            name: h.edge.name,
-            condition: h.condition,
-          }))
+        edgeName: conditionalEdge.name,
+        path: traceValidPathThroughHorizons(
+          graph,
+          horizons,
+          (prevEdge, currEdge) => prevEdge.to === currEdge.from,
+          (packValue, effectValue) => packValue + effectValue
         ),
       };
     });
@@ -410,47 +486,6 @@ const getPathFromHorizonEdgeNames = <EdgeName extends string>(
     if (_.isNil(validEdge)) throw new Error("Horizons not traversable");
 
     return validEdge;
-  });
-};
-
-const traceValidPathThroughHorizons = <
-  StateId extends string,
-  S extends State<StateId>,
-  EdgeName extends string,
-  R extends string
->(
-  graph: Graph<StateId, S, EdgeName, R>,
-  horizons: Horizon<EdgeName, R>[],
-  updatePackTo: (packValue: number, effectValue: number) => number
-): EdgeName[] => {
-  const edges = graph.getEdges();
-  const allResources = graph.getResources();
-  const effectPack: Partial<Record<R, number>> = {};
-  const addToPack = (resource: R, value: number | undefined) => {
-    effectPack[resource] = updatePackTo(effectPack[resource] ?? 0, value ?? 0);
-  };
-
-  const reversedHorizons = _.reverse(_.cloneDeep(horizons));
-
-  return _.map(reversedHorizons, (horizon) => {
-    const validEdges = _.filter(horizon, (edge) => {
-      const cond = edge.condition;
-      return (
-        _.isNil(cond) ||
-        _.every(allResources, (r) => verifyCond(effectPack[r] ?? 0, r, cond))
-      );
-    });
-    // TODO track multiple valid routes?
-    const validEdge = _.first(validEdges);
-    if (_.isNil(validEdge)) throw new Error("Horizons not traversable");
-
-    _.forEach(
-      _.find(edges, (e) => e.name === validEdge.name)?.resourceEffects,
-      // TODO proper typing
-      (val, res) => addToPack(res as R, val)
-    );
-
-    return validEdge.name;
   });
 };
 
@@ -753,6 +788,7 @@ const getCleanupPath = <
             condition: edge.condition,
           }))
         ),
+        (prevEdge, currEdge) => prevEdge.from === currEdge.to,
         (packValue, effectValue) => packValue - effectValue
       )
     );
@@ -821,20 +857,12 @@ export const runScheduler = <
   }
   // automatically calculate prep and cleanup paths to resolve effects
   console.log("Validating graph satisfiability");
-  const satisfiabilityCheckResult = naiveSatisfiabilityCheck(graph);
-  if (satisfiabilityCheckResult === false) {
+  const conditionalPaths = getConditionalPaths(graph);
+  if (conditionalPaths === false) {
     // TODO actually say what's unsatisfiable
     throw new Error("Some conditions are unsatisfiable");
   }
   console.log("Calculating conditional paths");
-  const conditionalPaths = _.map(satisfiabilityCheckResult, (result) => ({
-    edgeName: result.conditionalEdge,
-    path: traceValidPathThroughHorizons(
-      graph,
-      result.horizons,
-      (packValue, effectValue) => packValue + effectValue
-    ),
-  }));
 
   console.log("Calculating non-conditional paths");
   const nonConditionalPaths = getNonConditionalPaths(graph, conditionalPaths);
