@@ -320,7 +320,52 @@ const calculateIsNeighbour = <
   if (_.isNil(prev) || _.isNil(curr)) throw new Error("Edge not found");
   return isNeighbour(prev, curr);
 };
-const traceValidPathThroughHorizons = <
+const traceHorizonPath = <
+  StateId extends string,
+  S extends State<StateId>,
+  EdgeName extends string,
+  R extends string,
+  H extends { name: EdgeName }
+>(
+  graph: Graph<StateId, S, EdgeName, R>,
+  horizons: H[][],
+  isNeighbour: Parameters<typeof calculateIsNeighbour>[3],
+  validationFilter: (horizon: H) => boolean = () => true,
+  onValidEdgeFound?: (validEdge: H) => void
+): EdgeName[] => {
+  const edges = graph.getEdges();
+  // TODO typing
+  const keyedEdges = _.keyBy(edges, "name") as Record<
+    EdgeName,
+    (typeof edges)[number]
+  >;
+
+  const reversedHorizons = _.reverse(_.cloneDeep(horizons));
+
+  let previousEdgeName: EdgeName | null = null;
+  return _.map(reversedHorizons, (horizon) => {
+    const validEdges = horizon.filter(
+      (horizon) =>
+        calculateIsNeighbour(
+          previousEdgeName,
+          horizon.name,
+          keyedEdges,
+          isNeighbour
+        ) && validationFilter(horizon)
+    );
+    // TODO track multiple valid routes?
+    const validEdge = _.first(validEdges);
+    if (_.isNil(validEdge)) throw new Error("Horizons not traversable");
+
+    onValidEdgeFound?.(validEdge);
+
+    previousEdgeName = validEdge.name;
+
+    return validEdge.name;
+  });
+};
+
+const traceHorizonPathWithConditionPack = <
   StateId extends string,
   S extends State<StateId>,
   EdgeName extends string,
@@ -332,49 +377,31 @@ const traceValidPathThroughHorizons = <
   updatePackTo: (packValue: number, effectValue: number) => number
 ): EdgeName[] => {
   const edges = graph.getEdges();
-  // TODO typing
-  const keyedEdges = _.keyBy(edges, "name") as Record<
-    EdgeName,
-    (typeof edges)[number]
-  >;
   const allResources = graph.getResources();
   const effectPack: Partial<Record<R, number>> = {};
   const addToPack = (resource: R, value: number | undefined) => {
     effectPack[resource] = updatePackTo(effectPack[resource] ?? 0, value ?? 0);
   };
 
-  const reversedHorizons = _.reverse(_.cloneDeep(horizons));
-
-  let previousEdgeName: EdgeName | null = null;
-  return _.map(reversedHorizons, (horizon) => {
-    const validEdges = _.filter(horizon, (edge) => {
+  return traceHorizonPath(
+    graph,
+    horizons,
+    isNeighbour,
+    (edge) => {
       const cond = edge.condition;
-
       return (
-        calculateIsNeighbour(
-          previousEdgeName,
-          edge.name,
-          keyedEdges,
-          isNeighbour
-        ) &&
-        (_.isNil(cond) ||
-          _.every(allResources, (r) => verifyCond(effectPack[r] ?? 0, r, cond)))
+        _.isNil(cond) ||
+        _.every(allResources, (r) => verifyCond(effectPack[r] ?? 0, r, cond))
       );
-    });
-    // TODO track multiple valid routes?
-    const validEdge = _.first(validEdges);
-    if (_.isNil(validEdge)) throw new Error("Horizons not traversable");
-
-    _.forEach(
-      _.find(edges, (e) => e.name === validEdge.name)?.resourceEffects,
-      // TODO proper typing
-      (val, res) => addToPack(res as R, val)
-    );
-
-    previousEdgeName = validEdge.name;
-
-    return validEdge.name;
-  });
+    },
+    (validEdge) => {
+      _.forEach(
+        _.find(edges, (e) => e.name === validEdge.name)?.resourceEffects,
+        // TODO proper typing
+        (val, res) => addToPack(res as R, val)
+      );
+    }
+  );
 };
 
 // Check if all conditional edges have some route from a starting state that
@@ -455,7 +482,7 @@ export const getConditionalPaths = <
 
       return {
         edgeName: conditionalEdge.name,
-        path: traceValidPathThroughHorizons(
+        path: traceHorizonPathWithConditionPack(
           graph,
           horizons,
           (prevEdge, currEdge) => prevEdge.to === currEdge.from,
@@ -472,24 +499,7 @@ export const getConditionalPaths = <
   }
 };
 
-// TODO!! usage is sus. confirm filters are correct
-const getPathFromHorizonEdgeNames = <EdgeName extends string>(
-  horizons: EdgeName[][],
-  horizonEdgeFilter: (horizon: EdgeName) => boolean = () => true
-): EdgeName[] => {
-  const reversedHorizons = _.reverse(_.cloneDeep(horizons));
-
-  return _.map(reversedHorizons, (horizon) => {
-    const filteredHorizon = horizon.filter(horizonEdgeFilter);
-    // TODO track multiple valid routes?
-    const validEdge = _.first(filteredHorizon);
-    if (_.isNil(validEdge)) throw new Error("Horizons not traversable");
-
-    return validEdge;
-  });
-};
-
-const getNonConditionalPaths = <
+export const getNonConditionalPaths = <
   StateId extends string,
   S extends State<StateId>,
   EdgeName extends string,
@@ -586,8 +596,13 @@ const getNonConditionalPaths = <
               conditionalEdgeFound[conditionalEdgeName] = {
                 // lop off the head. the conditional path includes its own edge
                 pathToNonConditional: _.tail(
-                  // TODO confirm no filtering is needed here
-                  getPathFromHorizonEdgeNames(horizons)
+                  traceHorizonPath(
+                    graph,
+                    _.map(horizons, (horizon) =>
+                      _.map(horizon, (h) => ({ name: h }))
+                    ),
+                    (prevEdge, currEdge) => prevEdge.to === currEdge.from
+                  )
                 ),
               };
             }
@@ -649,8 +664,11 @@ const getNonConditionalPaths = <
 
       return {
         edgeName: nonConditionalEdge.name,
-        // TODO confirm no filtering is needed here
-        path: getPathFromHorizonEdgeNames(allHorizons),
+        path: traceHorizonPath(
+          graph,
+          _.map(allHorizons, (horizon) => _.map(horizon, (h) => ({ name: h }))),
+          (prevEdge, currEdge) => prevEdge.to === currEdge.from
+        ),
       };
     }
   );
@@ -779,7 +797,7 @@ const getCleanupPath = <
     );
 
     return _.reverse(
-      traceValidPathThroughHorizons(
+      traceHorizonPathWithConditionPack(
         graph,
         // ignore first element since it's the edge to clean
         _.tail(allHorizons).map((horizon) =>
