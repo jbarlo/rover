@@ -58,7 +58,7 @@ async function main() {
     console.log("Scheduler Complete!");
 
     console.log("Running...");
-    runSteps(steps, allEdges);
+    runSteps(steps, graph.getEdges());
     console.log("Done");
   } catch (e) {
     console.error(e);

@@ -2,8 +2,8 @@ import { createEdges, createStates } from "./graph.js";
 
 // TODO ensure unique IDs
 export const states = createStates([
-  { id: "1", url: "start" },
-  { id: "2" },
+  { id: "1" },
+  { id: "2", url: "start" },
   { id: "3" },
 ]);
 

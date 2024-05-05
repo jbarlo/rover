@@ -40,10 +40,6 @@ interface BaseEdge<
   condition?: Resource extends string
     ? Cond<EdgeCondition<Resource>>
     : undefined;
-  // TODO -- very inefficient to define reusable prep and cleanup since nav and effects
-  // should be performable via UI.
-  // the graph should be able to determine what resources are needed for each action,
-  // then a prep path can be automatically generated before execution
   action: () => void;
   virtual?: boolean;
 }
@@ -83,8 +79,9 @@ export interface Graph<
   EdgeName extends string,
   Resource extends string
 > {
-  getEdges: () => Edges<EdgeName, S[], Resource>;
+  getEdges: (excludeImplicit?: boolean) => Edges<EdgeName, S[], Resource>;
   getStates: () => S[];
+  getNavigableStates: () => S[];
   getResources: () => Resource[];
 }
 export const initGraph: <
@@ -97,9 +94,33 @@ export const initGraph: <
   edges: Edges<EdgeName, S[], Resource>,
   resources: Resource[]
 ) => Graph<StateId, S, EdgeName, Resource> = (states, edges, resources) => {
+  const getStates = () => _.cloneDeep(states);
+  const getNavigableStates = () => getStates().filter((s) => !_.isNil(s.url));
+
+  const implicitEdges = _.flatMap(getNavigableStates(), (navState) =>
+    _.compact(
+      _.map(getStates(), (otherState) => {
+        if (navState.id === otherState.id) return null;
+        const implicitEdge = {
+          from: otherState.id,
+          to: navState.id,
+          // TODO guarantee uniqueness
+          name: `implicit-${otherState.id}-to-${navState.id}` as const,
+          // TODO internal type to avoid action?
+          action: () => {},
+        };
+        return implicitEdge;
+      })
+    )
+  ) as typeof edges; // TODO fix
+  const getEdges = (excludeImplicit = false) =>
+    excludeImplicit
+      ? _.cloneDeep(edges)
+      : [..._.cloneDeep(edges), ...implicitEdges];
   return {
-    getEdges: () => _.cloneDeep(edges),
-    getStates: () => _.cloneDeep(states),
+    getEdges,
+    getStates,
+    getNavigableStates,
     getResources: () => _.cloneDeep(resources),
   };
 };

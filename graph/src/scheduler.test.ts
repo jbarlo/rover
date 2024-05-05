@@ -21,7 +21,7 @@ describe("scheduler", () => {
 
   const resources = ["apples" as const, "bananas" as const];
 
-  const edges = createEdges(
+  const e = createEdges(
     [
       {
         from: "1",
@@ -81,7 +81,7 @@ describe("scheduler", () => {
     resources
   );
 
-  const goodGraph = initGraph(states, edges, resources);
+  const goodGraph = initGraph(states, e, resources);
 
   type Resource = (typeof resources)[number];
   const preparePack = () => {
@@ -103,6 +103,7 @@ describe("scheduler", () => {
       it("should return every conditional edge if graph is satisfiable", () => {
         const result = getConditionalPaths(goodGraph);
         if (result === false) throw new Error("Graph is not satisfiable");
+        const edges = goodGraph.getEdges();
         const conditionalEdges = edges.filter(
           (edge) => !_.isNil(edge.condition)
         );
@@ -124,6 +125,7 @@ describe("scheduler", () => {
       it("should return a contiguous path through the graph to each conditional edge", () => {
         const result = getConditionalPaths(goodGraph);
         if (result === false) throw new Error("Graph is not satisfiable");
+        const edges = goodGraph.getEdges();
         const keyedEdges = _.keyBy(edges, "name");
         _.each(result, (step) => {
           const pathEdges = step.path.map((p) => {
@@ -147,6 +149,7 @@ describe("scheduler", () => {
         const result = getConditionalPaths(goodGraph);
         if (result === false) throw new Error("Graph is not satisfiable");
 
+        const edges = goodGraph.getEdges();
         const keyedEdges = _.keyBy(edges, "name");
         _.each(result, (step) => {
           const { pack, applyResourceEffect } = preparePack();
@@ -168,7 +171,7 @@ describe("scheduler", () => {
     });
 
     describe("getNonConditionalPaths", () => {
-      it("should return a path for every non-conditional edge", () => {
+      it("should return a path for every nonimplicit, non-conditional edge", () => {
         const conditionalPaths = getConditionalPaths(goodGraph);
         if (conditionalPaths === false)
           throw new Error("Graph is not satisfiable");
@@ -176,7 +179,8 @@ describe("scheduler", () => {
           goodGraph,
           conditionalPaths
         );
-        const nonConditionalEdges = edges.filter((edge) =>
+        const nonimplicitEdges = goodGraph.getEdges(true);
+        const nonConditionalEdges = nonimplicitEdges.filter((edge) =>
           _.isNil(edge.condition)
         );
         expect(nonConditionalPaths).toHaveLength(nonConditionalEdges.length);
@@ -202,6 +206,7 @@ describe("scheduler", () => {
           goodGraph,
           conditionalPaths
         );
+        const edges = goodGraph.getEdges();
         const keyedEdges = _.keyBy(edges, "name");
         _.each(nonConditionalPaths, (step) => {
           const pathEdges = step.path.map((p) => {
@@ -209,6 +214,12 @@ describe("scheduler", () => {
             if (_.isNil(edge)) throw new Error("Edge not found");
             return edge;
           });
+          expect(
+            _.some(
+              goodGraph.getNavigableStates(),
+              (navState) => navState.id === _.first(pathEdges)!.from
+            )
+          ).toBe(true);
           const neighbourSteps = _.zip<
             (typeof pathEdges)[number],
             (typeof pathEdges)[number]
@@ -229,6 +240,7 @@ describe("scheduler", () => {
           goodGraph,
           conditionalPaths
         );
+        const edges = goodGraph.getEdges();
         const keyedEdges = _.keyBy(edges, "name");
         _.each(nonConditionalPaths, (step) => {
           const { pack, applyResourceEffect } = preparePack();
@@ -251,6 +263,7 @@ describe("scheduler", () => {
 
     const prepSteps = () => {
       const steps = runScheduler(goodGraph);
+      const edges = goodGraph.getEdges();
       const keyedEdges = _.keyBy(edges, "name");
       return steps.map((step) => {
         const edge = keyedEdges[step.edgeName];
@@ -259,7 +272,10 @@ describe("scheduler", () => {
       });
     };
 
-    it.only("should produce a contiguous path through the graph", () => {
+    // TODO NEXT STEPS: something is broken with nonConditionalPaths:
+    //  "go-to-1-from-3" doesn't find a path leaving from 2
+
+    it("should produce a contiguous path through the graph", () => {
       const stepsWithEdges = prepSteps();
       const neighbourSteps = _.zip<
         (typeof stepsWithEdges)[number],
@@ -268,6 +284,9 @@ describe("scheduler", () => {
 
       onTestFailed(() => {
         console.log(stepsWithEdges);
+        console.log(
+          _.find(neighbourSteps, ([a, b]) => a!.edge.to !== b!.edge.from)
+        );
       });
 
       expect(
@@ -308,6 +327,7 @@ describe("scheduler", () => {
     it("should produce exactly one action step for every edge", () => {
       const steps = runScheduler(goodGraph);
       const actionSteps = steps.filter((step) => step.type === "action");
+      const edges = goodGraph.getEdges();
       expect(actionSteps).toHaveLength(edges.length);
       // all unique names
       expect(_.uniqBy(actionSteps, "edgeName")).toHaveLength(
