@@ -284,22 +284,12 @@ describe("scheduler", () => {
       });
     };
 
-    // TODO NEXT STEPS: something is broken with nonConditionalPaths:
-    //  "go-to-1-from-3" doesn't find a path leaving from 2
-
     it("should produce a contiguous path through the graph", () => {
       const stepsWithEdges = prepSteps();
       const neighbourSteps = _.zip<
         (typeof stepsWithEdges)[number],
         (typeof stepsWithEdges)[number]
       >(_.initial(stepsWithEdges), _.tail(stepsWithEdges));
-
-      onTestFailed(() => {
-        console.log(stepsWithEdges);
-        console.log(
-          _.find(neighbourSteps, ([a, b]) => a!.edge.to !== b!.edge.from)
-        );
-      });
 
       expect(
         _.every(neighbourSteps, ([a, b]) => a!.edge.to === b!.edge.from)
@@ -339,7 +329,7 @@ describe("scheduler", () => {
     it("should produce exactly one action step for every edge", () => {
       const steps = runScheduler(goodGraph);
       const actionSteps = steps.filter((step) => step.type === "action");
-      const edges = goodGraph.getEdges();
+      const edges = goodGraph.getEdges(true);
       expect(actionSteps).toHaveLength(edges.length);
       // all unique names
       expect(_.uniqBy(actionSteps, "edgeName")).toHaveLength(

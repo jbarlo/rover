@@ -80,6 +80,7 @@ export interface Graph<
   Resource extends string
 > {
   getEdges: (excludeImplicit?: boolean) => Edges<EdgeName, S[], Resource>;
+  getImplicitEdges: () => Edges<EdgeName, S[], Resource>;
   getStates: () => S[];
   getNavigableStates: () => S[];
   getResources: () => Resource[];
@@ -114,12 +115,16 @@ export const initGraph: <
       })
     )
   ) as typeof edges; // TODO fix
+
+  const getImplicitEdges = () => _.cloneDeep(implicitEdges);
+
   const getEdges = (excludeImplicit = false) =>
     excludeImplicit
       ? _.cloneDeep(edges)
-      : [..._.cloneDeep(edges), ...implicitEdges];
+      : [..._.cloneDeep(edges), ...getImplicitEdges()];
   return {
     getEdges,
+    getImplicitEdges,
     getStates,
     getNavigableStates,
     getResources: () => _.cloneDeep(resources),

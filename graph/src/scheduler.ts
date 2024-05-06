@@ -14,6 +14,7 @@ import {
   NONCONDITIONAL_PATH_LIMIT,
 } from "./constants.js";
 import { EdgeCondition, Edges, Graph, State } from "./graph.js";
+import { interlace } from "./utils.js";
 
 // Check if all states are reachable from starting states
 const traversabilityCheck = <
@@ -881,7 +882,14 @@ export interface Step<EdgeName extends string> {
   type: "prep" | "action" | "cleanup";
 }
 
-// produce a list of edge action and cleanup steps that trace a path through the graph
+// produce a list of edge action and cleanup steps that trace a path through the
+// graph
+//
+// TODO improvements:
+// - treat cleanup steps as potential for deredundancy
+// - current implementation doesn't construct new paths on the fly, resulting in
+//   it cleaning up a bunch of resources just to recreate them again
+// - tracking more valid paths might help determine more optimal total paths
 export const runScheduler = <
   StateId extends string,
   S extends State<StateId>,
@@ -928,20 +936,19 @@ export const runScheduler = <
 
   const nonRedundantRoutes = getNonRedundantRoutes(cleanupRoutes);
 
-  const edges = graph.getEdges(true);
-
-  // TODO stitch implicit edges between paths as necessary so arbitrary paths
-  // can precede any other path, with any other starting state
+  const nonimplicitEdges = graph.getEdges(true);
 
   // label each step as prep, action, or cleanup.
   // - if an edge would be prep, but has never been traversed, call it an
   //   action. the actual route has been labeled redundant
   const edgeTraversed = _.mapValues(
-    _.keyBy(edges, "name"),
+    _.keyBy(nonimplicitEdges, "name"),
     () => false
   ) as Record<EdgeName, boolean>;
 
-  return _.flatMap(nonRedundantRoutes, (route) => [
+  // stitch implicit edges between paths as necessary so arbitrary paths can
+  // precede any other path, with any other starting state
+  const unstitchedRoutes = _.map(nonRedundantRoutes, (route) => [
     ..._.map(route.preparationPath, (e) => {
       const edgeUntraversed = !edgeTraversed[e];
       if (edgeUntraversed) edgeTraversed[e] = true;
@@ -959,4 +966,28 @@ export const runScheduler = <
       type: "cleanup" as const,
     })),
   ]);
+  const keyedNonImplicitEdges = _.keyBy(nonimplicitEdges, "name");
+  const implicitEdges = graph.getImplicitEdges();
+  return _.flatten(
+    interlace(unstitchedRoutes, (before, after) => {
+      const lastBeforeEdge = _.last(before);
+      const firstAfterEdge = _.first(after);
+      if (_.isNil(lastBeforeEdge) || _.isNil(firstAfterEdge))
+        throw new Error("Edge not found");
+      const beforeEdge = keyedNonImplicitEdges[lastBeforeEdge.edgeName];
+      const afterEdge = keyedNonImplicitEdges[firstAfterEdge.edgeName];
+      if (_.isNil(beforeEdge) || _.isNil(afterEdge))
+        throw new Error("Edge not found");
+
+      // already linked - don't do anything
+      if (beforeEdge.to === afterEdge.from) return [];
+
+      const implicitEdge = _.find(
+        implicitEdges,
+        (e) => e.from === beforeEdge.to && e.to === afterEdge.from
+      );
+      if (_.isNil(implicitEdge)) throw new Error("Implicit edge not found");
+      return [{ type: "cleanup" as const, edgeName: implicitEdge?.name }];
+    })
+  );
 };
