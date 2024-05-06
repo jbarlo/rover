@@ -97,6 +97,7 @@ export const initGraph: <
   const getStates = () => _.cloneDeep(states);
   const getNavigableStates = () => getStates().filter((s) => !_.isNil(s.url));
 
+  // TODO implicit edges with effects -- will affect path stitching
   const implicitEdges = _.flatMap(getNavigableStates(), (navState) =>
     _.compact(
       _.map(getStates(), (otherState) => {

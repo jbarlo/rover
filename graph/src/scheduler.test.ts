@@ -133,6 +133,14 @@ describe("scheduler", () => {
             if (_.isNil(edge)) throw new Error("Edge not found");
             return edge;
           });
+          // check that the first state is navigable
+          expect(
+            _.some(
+              goodGraph.getNavigableStates(),
+              (navState) => navState.id === _.first(pathEdges)!.from
+            )
+          ).toBe(true);
+          // check every edge is contiguous
           const neighbourSteps = _.zip<
             (typeof pathEdges)[number],
             (typeof pathEdges)[number]
@@ -140,6 +148,7 @@ describe("scheduler", () => {
           expect(_.every(neighbourSteps, ([a, b]) => a!.to === b!.from)).toBe(
             true
           );
+          // check that the last edge is the expected edge
           expect(_.last(pathEdges)!.name).toBe(step.edgeName);
         });
         expect.hasAssertions();
@@ -214,12 +223,14 @@ describe("scheduler", () => {
             if (_.isNil(edge)) throw new Error("Edge not found");
             return edge;
           });
+          // check that the first state is navigable
           expect(
             _.some(
               goodGraph.getNavigableStates(),
               (navState) => navState.id === _.first(pathEdges)!.from
             )
           ).toBe(true);
+          // check every edge is contiguous
           const neighbourSteps = _.zip<
             (typeof pathEdges)[number],
             (typeof pathEdges)[number]
@@ -227,6 +238,7 @@ describe("scheduler", () => {
           expect(_.every(neighbourSteps, ([a, b]) => a!.to === b!.from)).toBe(
             true
           );
+          // check that the last edge is the expected edge
           expect(_.last(pathEdges)!.name).toBe(step.edgeName);
         });
         expect.hasAssertions();

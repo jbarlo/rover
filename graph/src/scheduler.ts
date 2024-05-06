@@ -326,6 +326,7 @@ const traceHorizonPath = <
   graph: Graph<StateId, S, EdgeName, R>,
   horizons: H[][],
   isNeighbour: Parameters<typeof calculateIsNeighbour>[3],
+  firstHorizonFilter: (horizon: H) => boolean = () => true,
   validationFilter: (horizon: H) => boolean = () => true,
   onValidEdgeFound?: (validEdge: H) => void
 ): EdgeName[] => {
@@ -342,12 +343,14 @@ const traceHorizonPath = <
   return _.map(reversedHorizons, (horizon) => {
     const validEdges = horizon.filter(
       (horizon) =>
+        (!_.isNil(previousEdgeName) || firstHorizonFilter(horizon)) &&
         calculateIsNeighbour(
           previousEdgeName,
           horizon.name,
           keyedEdges,
           isNeighbour
-        ) && validationFilter(horizon)
+        ) &&
+        validationFilter(horizon)
     );
     // TODO track multiple valid routes?
     const validEdge = _.first(validEdges);
@@ -370,6 +373,7 @@ const traceHorizonPathWithConditionPack = <
   graph: Graph<StateId, S, EdgeName, R>,
   horizons: Horizon<EdgeName, R>[],
   isNeighbour: Parameters<typeof calculateIsNeighbour>[3],
+  firstHorizonFilter: (horizonEdge: Horizon<EdgeName, R>[number]) => boolean,
   updatePackTo: (packValue: number, effectValue: number) => number
 ): EdgeName[] => {
   const edges = graph.getEdges();
@@ -383,6 +387,7 @@ const traceHorizonPathWithConditionPack = <
     graph,
     horizons,
     isNeighbour,
+    firstHorizonFilter,
     (edge) => {
       const cond = edge.condition;
       return (
@@ -481,6 +486,14 @@ export const getConditionalPaths = <
           graph,
           horizons,
           (prevEdge, currEdge) => prevEdge.to === currEdge.from,
+          (horizonEdge) => {
+            const edge = nameKeyedEdges[horizonEdge.name];
+            if (_.isNil(edge)) throw new Error("Edge not found");
+            return _.some(
+              graph.getNavigableStates(),
+              (navState) => navState.id === edge.from
+            );
+          },
           (packValue, effectValue) => packValue + effectValue
         ),
       };
@@ -601,6 +614,9 @@ export const getNonConditionalPaths = <
                   )
                 ),
               };
+              // keep looking until a starting state is found. this is to avoid
+              // the case where a conditional edge is found but the total path
+              // to a starting state is longer than a direct route
             }
 
             // break if a starting state is reached
@@ -663,7 +679,15 @@ export const getNonConditionalPaths = <
         path: traceHorizonPath(
           graph,
           _.map(allHorizons, (horizon) => _.map(horizon, (h) => ({ name: h }))),
-          (prevEdge, currEdge) => prevEdge.to === currEdge.from
+          (prevEdge, currEdge) => prevEdge.to === currEdge.from,
+          (horizonEdge) => {
+            const edge = nameKeyedEdges[horizonEdge.name];
+            if (_.isNil(edge)) throw new Error("Edge not found");
+            return _.some(
+              graph.getNavigableStates(),
+              (navState) => navState.id === edge.from
+            );
+          }
         ),
       };
     }
@@ -779,8 +803,6 @@ const getCleanupPath = <
     (_.isBoolean(condition) && condition) ||
     (!_.isBoolean(condition) && edgeConditionIsSatisfiable(condition));
 
-  const navigableStates = graph.getNavigableStates();
-
   try {
     const allHorizons = conditionalPropagationBfs(
       edges,
@@ -790,11 +812,7 @@ const getCleanupPath = <
       (packValue, effectValue) => packValue + effectValue,
       () => true,
       // if validNewHorizon contains a 0-pack, succeed
-      ({ condition: cond, edge: e }) =>
-        _.some(
-          navigableStates,
-          (s): boolean => e.to === s.id && condIsSuccessful(cond)
-        ),
+      ({ condition: cond }) => condIsSuccessful(cond),
       unpropagatedConditionPredicate
     );
 
@@ -809,6 +827,7 @@ const getCleanupPath = <
           }))
         ),
         (prevEdge, currEdge) => prevEdge.from === currEdge.to,
+        () => true,
         (packValue, effectValue) => packValue - effectValue
       )
     );
@@ -887,11 +906,6 @@ export const runScheduler = <
   console.log("Calculating non-conditional paths");
   const nonConditionalPaths = getNonConditionalPaths(graph, conditionalPaths);
 
-  // TODO effectful implicit nav edges: add all implicit state -> starting state
-  // edges to calculate complete paths
-
-  console.log(JSON.stringify([...conditionalPaths, ...nonConditionalPaths]));
-
   const cleanupRoutes: Route<EdgeName>[] = _.map(
     [...conditionalPaths, ...nonConditionalPaths],
     (path) => {
@@ -915,6 +929,9 @@ export const runScheduler = <
   const nonRedundantRoutes = getNonRedundantRoutes(cleanupRoutes);
 
   const edges = graph.getEdges(true);
+
+  // TODO stitch implicit edges between paths as necessary so arbitrary paths
+  // can precede any other path, with any other starting state
 
   // label each step as prep, action, or cleanup.
   // - if an edge would be prep, but has never been traversed, call it an
