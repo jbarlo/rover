@@ -615,9 +615,18 @@ export const getNonConditionalPaths = <
                   )
                 ),
               };
-              // keep looking until a starting state is found. this is to avoid
-              // the case where a conditional edge is found but the total path
-              // to a starting state is longer than a direct route
+              return false;
+              // NOTE: the current implementation does not guarantee a path
+              // shorter than a nonconditional route from the starting state.
+              //
+              // TODO don't escape early - track all conditional paths that are
+              // found until a starting state is found. keep looking until a
+              // starting state is found
+              //
+              // notable gotcha: if comparing multiple paths to conditionals,
+              // each path must be verified to respect conditions of every edge.
+              // consider implementing with the conditional bfs, or just filter
+              // out paths that don't respect conditions above.
             }
 
             // break if a starting state is reached

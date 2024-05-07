@@ -14,7 +14,7 @@ import { verifyCond } from "./stateCond.js";
 
 describe("scheduler", () => {
   const states = createStates([
-    { id: "1" },
+    { id: "1", url: "start" },
     { id: "2", url: "start" },
     { id: "3" },
   ]);
@@ -257,6 +257,100 @@ describe("scheduler", () => {
         _.each(nonConditionalPaths, (step) => {
           const { pack, applyResourceEffect } = preparePack();
 
+          _.each(step.path, (pathStep) => {
+            const edge = keyedEdges[pathStep];
+            if (_.isNil(edge)) throw new Error("Edge not found");
+            _.each(resources, (resource) => {
+              expect(
+                _.isNil(edge.condition) ||
+                  verifyCond(pack[resource] ?? 0, resource, edge.condition)
+              ).toBe(true);
+            });
+            applyResourceEffect(edge.resourceEffects);
+          });
+        });
+        expect.hasAssertions();
+      });
+
+      it("should return a path that respects the condition of the edge, on a pathological case", () => {
+        // construct a graph that produces a case where the path for one
+        // conditional edge is shorter than the path for another conditional
+        // edge, but the shorter path if taken does not respect edge conditions
+        const minimalStates = createStates([
+          { id: "1" },
+          { id: "2" },
+          { id: "3", url: "start" },
+        ]);
+        const minimalResources = ["apples" as const];
+        const minimalEdges = createEdges(
+          [
+            {
+              from: "1",
+              to: "1",
+              name: "1-self-loop-x2",
+              resourceEffects: { apples: 2 },
+              condition: { resource: "apples", value: 4, operator: "gt" },
+              action: () => {
+                console.log("1-self-loop-x2");
+              },
+            },
+            {
+              from: "1",
+              to: "1",
+              name: "1-self-loop",
+              resourceEffects: { apples: 1 },
+              action: () => {
+                console.log("1-self-loop");
+              },
+            },
+            {
+              from: "1",
+              to: "2",
+              name: "go-to-2",
+              condition: { resource: "apples", value: 14, operator: "gt" },
+              action: () => {
+                console.log("go-to-2");
+              },
+            },
+            {
+              from: "2",
+              to: "3",
+              name: "go-to-3-from-2",
+              action: () => {
+                console.log("go-to-3-from-2");
+              },
+            },
+            {
+              from: "3",
+              to: "1",
+              name: "go-to-1-from-3",
+              resourceEffects: { apples: -15 },
+              action: () => {
+                console.log("go-to-1-from-3");
+              },
+            },
+          ],
+          minimalStates,
+          minimalResources
+        );
+
+        const goodGraph = initGraph(
+          minimalStates,
+          minimalEdges,
+          minimalResources
+        );
+
+        const conditionalPaths = getConditionalPaths(goodGraph);
+        if (conditionalPaths === false)
+          throw new Error("Graph is not satisfiable");
+        const nonConditionalPaths = getNonConditionalPaths(
+          goodGraph,
+          conditionalPaths
+        );
+        const edges = goodGraph.getEdges();
+        const keyedEdges = _.keyBy(edges, "name");
+        _.each(nonConditionalPaths, (step) => {
+          const { pack, applyResourceEffect } = preparePack();
           _.each(step.path, (pathStep) => {
             const edge = keyedEdges[pathStep];
             if (_.isNil(edge)) throw new Error("Edge not found");
