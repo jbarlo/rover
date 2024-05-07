@@ -23,6 +23,9 @@ describe("utils", () => {
     it("should return an empty an array when given an empty array", () => {
       expect(interlace([], () => "")).toEqual([]);
     });
+    it("should return the array as is when given a single item", () => {
+      expect(interlace(["a"], () => "x")).toEqual(["a"]);
+    });
     it("should place the separator between each element", () => {
       expect(interlace(["a", "b", "c", "d", "e"], () => "x")).toEqual([
         "a",
