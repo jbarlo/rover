@@ -16,7 +16,7 @@ describe("scheduler", () => {
   const states = createStates([
     { id: "1", url: "start" },
     { id: "2", url: "start" },
-    { id: "3" },
+    { id: "3", url: "start" },
   ]);
 
   const resources = ["apples" as const, "bananas" as const];

@@ -16,9 +16,12 @@ export const interlace = <T>(
 ): T[] => {
   const pairs = adjacentPairs(arr);
   if (pairs.isSolo) return [pairs.item];
-  return _.flatMap(pairs.pairs, ([before, after]) => [
-    before,
-    getSep(before, after),
-    after,
-  ]);
+  return _.flatMap(pairs.pairs, ([before, after], i) =>
+    _.compact([
+      before,
+      getSep(before, after),
+      // append last item if last pair
+      i >= pairs.pairs.length - 1 ? after : null,
+    ])
+  );
 };
