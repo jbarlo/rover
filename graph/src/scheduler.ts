@@ -1,5 +1,5 @@
 import { Cond, combineCond } from "./cond.js";
-import _ from "lodash";
+import _, { initial } from "lodash";
 import {
   HorizonEdgeCondition,
   edgeConditionIsSatisfiable,
@@ -21,6 +21,7 @@ import {
   State,
   AllEdgeNames,
   ValueOf,
+  preparePack,
 } from "./graph.js";
 import { interlace } from "./utils.js";
 
@@ -351,10 +352,8 @@ const traceHorizonPathWithConditionPack = <
 ): AllEdgeNames<StateId, EdgeName, R>[] => {
   const edges = graph.getEdges();
   const allResources = graph.getResources();
-  const effectPack: Partial<Record<R, number>> = {};
-  const addToPack = (resource: R, value: number | undefined) => {
-    effectPack[resource] = updatePackTo(effectPack[resource] ?? 0, value ?? 0);
-  };
+
+  const { pack: effectPack, applyResourceEffects } = preparePack(graph);
 
   return traceHorizonPath(
     graph,
@@ -365,14 +364,17 @@ const traceHorizonPathWithConditionPack = <
       const cond = edge.condition;
       return (
         _.isNil(cond) ||
-        _.every(allResources, (r) => verifyCond(effectPack[r] ?? 0, r, cond))
+        _.every(allResources, (r) => verifyCond(effectPack[r], r, cond))
       );
     },
     (validEdge) => {
-      _.forEach(
-        _.find(edges, (e) => e.name === validEdge.name)?.resourceEffects,
-        // TODO proper typing
-        (val, res) => addToPack(res as R, val)
+      const resourceEffects = _.find(
+        edges,
+        (e) => e.name === validEdge.name
+      )?.resourceEffects;
+      if (_.isNil(resourceEffects)) return;
+      applyResourceEffects(resourceEffects, (prev, value) =>
+        updatePackTo(prev, value)
       );
     }
   );
@@ -693,31 +695,15 @@ const getPackFromPath = <
   initialPack?: Partial<Record<R, number>>
 ): Record<R, number> => {
   const edges = graph.getEdges();
-  const allResources = graph.getResources();
 
-  const pack: Partial<Record<R, number>> = initialPack ?? {};
-
-  const addToPack = (
-    resourceEffect: Edges<EdgeName, S[], R>[number]["resourceEffects"]
-  ) => {
-    if (_.isNil(resourceEffect)) return;
-    _.forEach(resourceEffect, (val, res) => {
-      pack[res as R] = (pack[res as R] ?? 0) + (val ?? 0);
-    });
-  };
+  const { pack, applyResourceEffects } = preparePack(graph, initialPack);
 
   _.forEach(path, (edgeName) => {
     const edge = edges[edgeName];
-    addToPack(edge.resourceEffects);
+    applyResourceEffects(edge.resourceEffects, (prev, value) => prev + value);
   });
 
-  // TODO real types
-  const zeroedResources: Record<R, number> = _.mapValues(
-    _.keyBy(allResources),
-    () => 0
-  ) as Record<R, number>;
-
-  return { ...zeroedResources, ...pack };
+  return pack;
 };
 
 const packToCondition = <R extends string>(

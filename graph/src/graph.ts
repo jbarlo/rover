@@ -188,3 +188,38 @@ export type AllEdgeNames<
   EdgeName extends string,
   Resource extends string
 > = ValueOf<AllEdgesResult<StateId, EdgeName, Resource>>["name"];
+
+export const preparePack = <
+  StateId extends string,
+  S extends State<StateId>,
+  EdgeName extends string,
+  Resource extends string
+>(
+  graph: Graph<StateId, S, EdgeName, Resource>,
+  initialPack?: Partial<Record<Resource, number>>
+) => {
+  const emptyPack = _.mapValues(
+    _.keyBy(graph.getResources(), (r) => r),
+    () => 0
+  ) as Record<Resource, number>; // TODO typing
+  const pack: Record<Resource, number> = {
+    ...emptyPack,
+    ..._.omitBy(initialPack, (v) => _.isNil(v)),
+  };
+
+  const updatePack = (resource: Resource, update: (prev: number) => number) => {
+    pack[resource] = update(pack[resource]);
+  };
+
+  const applyResourceEffects = (
+    resourceEffect: ResourceEffects<Resource> | undefined,
+    updater: (prev: number, value: number) => number
+  ) => {
+    if (_.isNil(resourceEffect)) return;
+    _.forEach(resourceEffect, (value, resource) => {
+      updatePack(resource as Resource, (prev) => updater(prev, value ?? 0));
+    });
+  };
+
+  return { pack, updatePack, applyResourceEffects };
+};
