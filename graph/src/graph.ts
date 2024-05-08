@@ -13,10 +13,6 @@ export const createStates = <ID extends string>(states: State<ID>[]) => {
   return states;
 };
 
-type ParseIdFromState<T extends State<string>> = T extends State<infer ID>
-  ? ID
-  : never;
-
 export type EdgeCondition<Resource extends string> = {
   resource: Resource;
   value: number;
@@ -48,7 +44,7 @@ export type Edges<
   EdgeName extends string,
   States extends State<string>[],
   Resource extends string | null = null
-> = BaseEdge<EdgeName, ParseIdFromState<States[number]>, Resource>[];
+> = BaseEdge<EdgeName, States[number]["id"], Resource>[];
 
 export const createEdges = <
   EdgeName extends string,
@@ -122,6 +118,19 @@ export const initGraph: <
     excludeImplicit
       ? _.cloneDeep(edges)
       : [..._.cloneDeep(edges), ...getImplicitEdges()];
+
+  // Validation
+  // TODO zod
+  const s = getStates();
+  if (s.length !== _.uniqBy(s, "id").length) {
+    throw new Error("Duplicate state IDs");
+  }
+
+  const e = getEdges();
+  if (e.length !== _.uniqBy(e, "name").length) {
+    throw new Error("Duplicate edge names");
+  }
+
   return {
     getEdges,
     getImplicitEdges,
