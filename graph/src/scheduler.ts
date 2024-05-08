@@ -189,7 +189,6 @@ const conditionalPropagationBfs = <
           condition: prevHorizonEdgeCondition,
         }) => {
           const prevHorizonEdge = edges[prevHorizonEdgeName];
-          if (_.isNil(prevHorizonEdge)) return [];
 
           // get all edges that are directional neighbours to prevHorizonEdge
           const neighbours = getEdgeNeighbours(prevHorizonEdge);
@@ -294,26 +293,6 @@ const conditionalPropagationBfs = <
   );
 };
 
-const calculateIsNeighbour = <
-  StateId extends string,
-  S extends State<StateId>,
-  EdgeName extends string,
-  R extends string
->(
-  prevName: EdgeName | null,
-  currName: EdgeName,
-  keyedEdges: Record<EdgeName, Edges<EdgeName, S[], R>[number]>,
-  isNeighbour: (
-    prevEdge: Edges<EdgeName, S[], R>[number],
-    currEdge: Edges<EdgeName, S[], R>[number]
-  ) => boolean
-): boolean => {
-  if (_.isNil(prevName)) return true;
-  const prev = keyedEdges[prevName];
-  const curr = keyedEdges[currName];
-  if (_.isNil(prev) || _.isNil(curr)) throw new Error("Edge not found");
-  return isNeighbour(prev, curr);
-};
 const traceHorizonPath = <
   StateId extends string,
   S extends State<StateId>,
@@ -323,7 +302,10 @@ const traceHorizonPath = <
 >(
   graph: Graph<StateId, S, EdgeName, R>,
   horizons: H[][],
-  isNeighbour: Parameters<typeof calculateIsNeighbour>[3],
+  isNeighbour: (
+    prevEdge: Edges<AllEdgeNames<StateId, EdgeName, R>, S[], R>[number],
+    currEdge: Edges<AllEdgeNames<StateId, EdgeName, R>, S[], R>[number]
+  ) => boolean,
   firstHorizonFilter: (horizon: H) => boolean = () => true,
   validationFilter: (horizon: H) => boolean = () => true,
   onValidEdgeFound?: (validEdge: H) => void
@@ -337,12 +319,8 @@ const traceHorizonPath = <
     const validEdges = horizon.filter(
       (horizon) =>
         (!_.isNil(previousEdgeName) || firstHorizonFilter(horizon)) &&
-        calculateIsNeighbour(
-          previousEdgeName,
-          horizon.name,
-          edges,
-          isNeighbour
-        ) &&
+        (_.isNil(previousEdgeName) ||
+          isNeighbour(edges[previousEdgeName], edges[horizon.name])) &&
         validationFilter(horizon)
     );
     // TODO track multiple valid routes?
@@ -365,7 +343,7 @@ const traceHorizonPathWithConditionPack = <
 >(
   graph: Graph<StateId, S, EdgeName, R>,
   horizons: Horizon<AllEdgeNames<StateId, EdgeName, R>, R>[],
-  isNeighbour: Parameters<typeof calculateIsNeighbour>[3],
+  isNeighbour: Parameters<typeof traceHorizonPath>[2],
   firstHorizonFilter: (
     horizonEdge: Horizon<AllEdgeNames<StateId, EdgeName, R>, R>[number]
   ) => boolean,
@@ -728,11 +706,8 @@ const getPackFromPath = <
     });
   };
 
-  const nameKeyedEdges = _.keyBy(edges, "name");
-
   _.forEach(path, (edgeName) => {
-    const edge = nameKeyedEdges[edgeName];
-    if (_.isNil(edge)) throw new Error("Edge not found");
+    const edge = edges[edgeName];
     addToPack(edge.resourceEffects);
   });
 
@@ -968,18 +943,16 @@ export const runScheduler = <
       type: "cleanup" as const,
     })),
   ]);
-  const keyedNonImplicitEdges = _.keyBy(nonimplicitEdges, "name");
+  const edges = graph.getEdges();
   const implicitEdges = graph.getImplicitEdges();
   return _.flatten(
     interlace(unstitchedRoutes, (before, after) => {
       const lastBeforeEdge = _.last(before);
       const firstAfterEdge = _.first(after);
       if (_.isNil(lastBeforeEdge) || _.isNil(firstAfterEdge))
-        throw new Error("Edge not found");
-      const beforeEdge = keyedNonImplicitEdges[lastBeforeEdge.edgeName];
-      const afterEdge = keyedNonImplicitEdges[firstAfterEdge.edgeName];
-      if (_.isNil(beforeEdge) || _.isNil(afterEdge))
-        throw new Error("Edge not found");
+        throw new Error("Empty route found");
+      const beforeEdge = edges[lastBeforeEdge.edgeName];
+      const afterEdge = edges[firstAfterEdge.edgeName];
 
       // already linked - don't do anything
       if (beforeEdge.to === afterEdge.from) return [];
