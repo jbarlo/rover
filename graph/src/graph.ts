@@ -68,6 +68,31 @@ export const createEdges = <
 // - keyed states -- with 1-to-1 guarantees
 // - starting states (keyed maybe)
 // - all resources
+type ImplicitEdge<StateId extends string> = `implicit-${StateId}-to-${StateId}`;
+
+type GetEdgesResult<
+  StateId extends string,
+  EdgeName extends string,
+  Resource extends string
+> = Record<EdgeName, BaseEdge<EdgeName, StateId, Resource>>;
+export type AllEdgesResult<
+  StateId extends string,
+  EdgeName extends string,
+  Resource extends string
+> = GetEdgesResult<StateId, EdgeName | ImplicitEdge<StateId>, Resource>;
+export type OnlyExplicitEdgesResult<
+  StateId extends string,
+  EdgeName extends string,
+  Resource extends string
+> = GetEdgesResult<StateId, EdgeName, Resource>;
+type GetEdges<
+  StateId extends string,
+  EdgeName extends string,
+  Resource extends string
+> = {
+  (excludeImplicit?: false): AllEdgesResult<StateId, EdgeName, Resource>;
+  (excludeImplicit: true): OnlyExplicitEdgesResult<StateId, EdgeName, Resource>;
+};
 
 export interface Graph<
   StateId extends string,
@@ -75,8 +100,8 @@ export interface Graph<
   EdgeName extends string,
   Resource extends string
 > {
-  getEdges: (excludeImplicit?: boolean) => Edges<EdgeName, S[], Resource>;
-  getImplicitEdges: () => Edges<EdgeName, S[], Resource>;
+  getEdges: GetEdges<StateId, EdgeName, Resource>;
+  getImplicitEdges: () => BaseEdge<ImplicitEdge<StateId>, StateId, Resource>[];
   getStates: () => S[];
   getNavigableStates: () => S[];
   getResources: () => Resource[];
@@ -91,6 +116,10 @@ export const initGraph: <
   edges: Edges<EdgeName, S[], Resource>,
   resources: Resource[]
 ) => Graph<StateId, S, EdgeName, Resource> = (states, edges, resources) => {
+  type Resource = (typeof resources)[number];
+  type StateId = (typeof states)[number]["id"];
+  type EdgeName = (typeof edges)[number]["name"];
+
   const getStates = () => _.cloneDeep(states);
   const getNavigableStates = () => getStates().filter((s) => !_.isNil(s.url));
 
@@ -110,14 +139,26 @@ export const initGraph: <
         return implicitEdge;
       })
     )
-  ) as typeof edges; // TODO fix
+  );
 
   const getImplicitEdges = () => _.cloneDeep(implicitEdges);
 
-  const getEdges = (excludeImplicit = false) =>
-    excludeImplicit
-      ? _.cloneDeep(edges)
-      : [..._.cloneDeep(edges), ...getImplicitEdges()];
+  const getEdges: GetEdges<StateId, EdgeName, Resource> = (
+    excludeImplicit = false
+  ) => {
+    if (excludeImplicit) {
+      const toReturn = _.keyBy(
+        _.cloneDeep(edges),
+        "name"
+      ) as OnlyExplicitEdgesResult<StateId, EdgeName, Resource>; // TODO typing
+      return toReturn as any; // concession for function overload
+    }
+    const toReturn = _.keyBy(
+      [..._.cloneDeep(edges), ...getImplicitEdges()],
+      "name"
+    ) as AllEdgesResult<StateId, EdgeName, Resource>; // TODO typing
+    return toReturn as any; // concession for function overload
+  };
 
   // Validation
   // TODO zod
@@ -126,7 +167,7 @@ export const initGraph: <
     throw new Error("Duplicate state IDs");
   }
 
-  const e = getEdges();
+  const e = _.map(getEdges(), (e) => e);
   if (e.length !== _.uniqBy(e, "name").length) {
     throw new Error("Duplicate edge names");
   }
@@ -139,3 +180,11 @@ export const initGraph: <
     getResources: () => _.cloneDeep(resources),
   };
 };
+
+export type ValueOf<T> = T[keyof T];
+
+export type AllEdgeNames<
+  StateId extends string,
+  EdgeName extends string,
+  Resource extends string
+> = ValueOf<AllEdgesResult<StateId, EdgeName, Resource>>["name"];

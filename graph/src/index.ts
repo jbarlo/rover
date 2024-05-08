@@ -1,4 +1,4 @@
-import { Edges, State, initGraph } from "./graph.js";
+import { Graph, State, initGraph } from "./graph.js";
 import { Step, runScheduler } from "./scheduler.js";
 import { states, edges, resources } from "./state.js";
 import _ from "lodash";
@@ -10,13 +10,12 @@ const runSteps = <
   Resource extends string
 >(
   steps: Step<EdgeName>[],
-  edges: Edges<EdgeName, S[], Resource>
+  graph: Graph<StateId, S, EdgeName, Resource>
 ) => {
+  const edges = graph.getEdges();
   // run each edge's prep, action, and cleanup -- do snapshotting, etc
-  const keyedEdges = _.keyBy(edges, (e) => e.name);
   _.forEach(steps, (step) => {
-    const edge = keyedEdges[step.edgeName]!;
-    if (_.isNil(edge)) throw new Error("Edge not found");
+    const edge = edges[step.edgeName]!;
     edge.action();
   });
 };
@@ -32,7 +31,7 @@ async function main() {
     console.log("Scheduler Complete!");
 
     console.log("Running...");
-    runSteps(steps, graph.getEdges());
+    runSteps(steps, graph);
     console.log("Done");
   } catch (e) {
     console.error(e);

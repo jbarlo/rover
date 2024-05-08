@@ -104,7 +104,8 @@ describe("scheduler", () => {
         const result = getConditionalPaths(goodGraph);
         if (result === false) throw new Error("Graph is not satisfiable");
         const edges = goodGraph.getEdges();
-        const conditionalEdges = edges.filter(
+        const conditionalEdges = _.filter(
+          edges,
           (edge) => !_.isNil(edge.condition)
         );
         expect(result).toHaveLength(conditionalEdges.length);
@@ -189,7 +190,7 @@ describe("scheduler", () => {
           conditionalPaths
         );
         const nonimplicitEdges = goodGraph.getEdges(true);
-        const nonConditionalEdges = nonimplicitEdges.filter((edge) =>
+        const nonConditionalEdges = _.filter(nonimplicitEdges, (edge) =>
           _.isNil(edge.condition)
         );
         expect(nonConditionalPaths).toHaveLength(nonConditionalEdges.length);
@@ -424,7 +425,7 @@ describe("scheduler", () => {
       const steps = runScheduler(goodGraph);
       const actionSteps = steps.filter((step) => step.type === "action");
       const edges = goodGraph.getEdges(true);
-      expect(actionSteps).toHaveLength(edges.length);
+      expect(actionSteps).toHaveLength(_.size(edges));
       // all unique names
       expect(_.uniqBy(actionSteps, "edgeName")).toHaveLength(
         actionSteps.length
