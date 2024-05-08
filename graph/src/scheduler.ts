@@ -684,28 +684,6 @@ export const getNonConditionalPaths = <
   return _.compact(nonConditionalEdgePaths);
 };
 
-const getPackFromPath = <
-  StateId extends string,
-  S extends State<StateId>,
-  EdgeName extends string,
-  R extends string
->(
-  path: AllEdgeNames<StateId, EdgeName, R>[],
-  graph: Graph<StateId, S, EdgeName, R>,
-  initialPack?: Partial<Record<R, number>>
-): Record<R, number> => {
-  const edges = graph.getEdges();
-
-  const { pack, applyResourceEffects } = preparePack(graph, initialPack);
-
-  _.forEach(path, (edgeName) => {
-    const edge = edges[edgeName];
-    applyResourceEffects(edge.resourceEffects, (prev, value) => prev + value);
-  });
-
-  return pack;
-};
-
 const packToCondition = <R extends string>(
   pack: Record<R, number>
 ): Cond<EdgeCondition<R>> => ({
@@ -718,13 +696,13 @@ const packToCondition = <R extends string>(
           // TODO typing
           resource: resource as R,
           value: val - 1,
-          operator: "gt",
+          operator: "gt" as const,
         },
         {
           // TODO typing
           resource: resource as R,
           value: val + 1,
-          operator: "lt",
+          operator: "lt" as const,
         },
       ];
     }
@@ -842,6 +820,93 @@ const getNonRedundantRoutes = <EdgeName extends string>(
   return nonredundantRoutes;
 };
 
+const constructTotalPath = <
+  StateId extends string,
+  S extends State<StateId>,
+  EdgeName extends string,
+  Resource extends string
+>(
+  graph: Graph<StateId, S, EdgeName, Resource>,
+  routes: Route<AllEdgeNames<StateId, EdgeName, Resource>>[]
+) => {
+  const nonRedundantRoutes = getNonRedundantRoutes(routes);
+
+  // label each step as prep, action, or cleanup.
+  // - if an edge would be prep, but has never been traversed, call it an
+  //   action. the actual route has been labeled redundant
+  const nonimplicitEdges = graph.getEdges(true);
+  const edgeTraversed = _.mapValues(nonimplicitEdges, () => false) as Record<
+    AllEdgeNames<StateId, EdgeName, Resource>,
+    boolean
+  >; // TODO typing
+
+  // stitch implicit edges between paths as necessary so arbitrary paths can
+  // precede any other path, with any other starting state
+  const unstitchedRoutes = _.map(nonRedundantRoutes, (route) => [
+    ..._.map(route.preparationPath, (e) => {
+      const edgeUntraversed = !edgeTraversed[e];
+      if (edgeUntraversed) edgeTraversed[e] = true;
+      return {
+        edgeName: e,
+        type: edgeUntraversed ? ("action" as const) : ("prep" as const),
+      };
+    }),
+    {
+      edgeName: route.edgeName,
+      type: "action" as const,
+    },
+    ..._.map(route.cleanupPath, (e) => ({
+      edgeName: e,
+      type: "cleanup" as const,
+    })),
+  ]);
+  const edges = graph.getEdges();
+  const implicitEdges = graph.getImplicitEdges();
+  return _.flatten(
+    interlace(unstitchedRoutes, (before, after) => {
+      const lastBeforeEdge = _.last(before);
+      const firstAfterEdge = _.first(after);
+      if (_.isNil(lastBeforeEdge) || _.isNil(firstAfterEdge))
+        throw new Error("Empty route found");
+
+      const beforeEdge = edges[lastBeforeEdge.edgeName];
+      const afterEdge = edges[firstAfterEdge.edgeName];
+
+      // already linked - don't do anything
+      if (beforeEdge.to === afterEdge.from) return [];
+
+      const implicitEdge = _.find(
+        implicitEdges,
+        (e) => e.from === beforeEdge.to && e.to === afterEdge.from
+      );
+      if (_.isNil(implicitEdge)) throw new Error("Implicit edge not found");
+      return [{ type: "cleanup" as const, edgeName: implicitEdge?.name }];
+    })
+  );
+};
+
+const getPackFromPath = <
+  StateId extends string,
+  S extends State<StateId>,
+  EdgeName extends string,
+  R extends string
+>(
+  path: AllEdgeNames<StateId, EdgeName, R>[],
+  graph: Graph<StateId, S, EdgeName, R>,
+  initialPack?: Partial<Record<R, number>>
+): Record<R, number> => {
+  const edges = graph.getEdges();
+
+  const { pack, applyResourceEffects } = preparePack(graph, initialPack);
+
+  _.forEach(path, (edgeName) => {
+    const edge = edges[edgeName];
+    applyResourceEffects(edge.resourceEffects, (prev, value) => prev + value);
+  });
+
+  return pack;
+};
+
 export interface Step<EdgeName extends string> {
   edgeName: EdgeName;
   type: "prep" | "action" | "cleanup";
@@ -879,8 +944,10 @@ export const runScheduler = <
   console.log("Calculating non-conditional paths");
   const nonConditionalPaths = getNonConditionalPaths(graph, conditionalPaths);
 
-  const cleanupRoutes: Route<AllEdgeNames<StateId, EdgeName, Resource>>[] =
-    _.map([...conditionalPaths, ...nonConditionalPaths], (path) => {
+  console.log("Constructing routes");
+  const routes: Route<AllEdgeNames<StateId, EdgeName, Resource>>[] = _.map(
+    [...conditionalPaths, ...nonConditionalPaths],
+    (path) => {
       const cleanupPath = getCleanupPath(
         graph,
         path.edgeName,
@@ -895,60 +962,9 @@ export const runScheduler = <
         preparationPath: _.initial(path.path),
         cleanupPath,
       };
-    });
-
-  const nonRedundantRoutes = getNonRedundantRoutes(cleanupRoutes);
-
-  const nonimplicitEdges = graph.getEdges(true);
-
-  // label each step as prep, action, or cleanup.
-  // - if an edge would be prep, but has never been traversed, call it an
-  //   action. the actual route has been labeled redundant
-  const edgeTraversed = _.mapValues(nonimplicitEdges, () => false) as Record<
-    AllEdgeNames<StateId, EdgeName, Resource>,
-    boolean
-  >; // TODO typing
-
-  // stitch implicit edges between paths as necessary so arbitrary paths can
-  // precede any other path, with any other starting state
-  const unstitchedRoutes = _.map(nonRedundantRoutes, (route) => [
-    ..._.map(route.preparationPath, (e) => {
-      const edgeUntraversed = !edgeTraversed[e];
-      if (edgeUntraversed) edgeTraversed[e] = true;
-      return {
-        edgeName: e,
-        type: edgeUntraversed ? ("action" as const) : ("prep" as const),
-      };
-    }),
-    {
-      edgeName: route.edgeName,
-      type: "action" as const,
-    },
-    ..._.map(route.cleanupPath, (e) => ({
-      edgeName: e,
-      type: "cleanup" as const,
-    })),
-  ]);
-  const edges = graph.getEdges();
-  const implicitEdges = graph.getImplicitEdges();
-  return _.flatten(
-    interlace(unstitchedRoutes, (before, after) => {
-      const lastBeforeEdge = _.last(before);
-      const firstAfterEdge = _.first(after);
-      if (_.isNil(lastBeforeEdge) || _.isNil(firstAfterEdge))
-        throw new Error("Empty route found");
-      const beforeEdge = edges[lastBeforeEdge.edgeName];
-      const afterEdge = edges[firstAfterEdge.edgeName];
-
-      // already linked - don't do anything
-      if (beforeEdge.to === afterEdge.from) return [];
-
-      const implicitEdge = _.find(
-        implicitEdges,
-        (e) => e.from === beforeEdge.to && e.to === afterEdge.from
-      );
-      if (_.isNil(implicitEdge)) throw new Error("Implicit edge not found");
-      return [{ type: "cleanup" as const, edgeName: implicitEdge?.name }];
-    })
+    }
   );
+
+  console.log("Synthesizing total path");
+  return constructTotalPath(graph, routes);
 };
