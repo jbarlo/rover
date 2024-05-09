@@ -69,8 +69,8 @@ export const edgeConditionIsSatisfiable = <R extends string>(
       if (_.isNil(set) || set.size <= 0) return true; // skip empty sets
       const orderedValues = _.sortBy(Array.from(set));
       const shiftedDownByOne = _.map(orderedValues, (v) => v - 1);
-      // appease TS with ?? 0. orderedValues always contains at least 1 value
-      const finalShiftedUpOne = (_.last(orderedValues) ?? 0) + 1;
+      // appease TS, orderedValues always contains at least 1 value
+      const finalShiftedUpOne = _.last(orderedValues)! + 1;
       const testValues = _.uniq([
         ...orderedValues,
         ...shiftedDownByOne,

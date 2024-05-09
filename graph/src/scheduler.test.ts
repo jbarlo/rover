@@ -8,6 +8,7 @@ import {
 import {
   getConditionalPaths,
   getNonConditionalPaths,
+  pathIsValid,
   runScheduler,
 } from "./scheduler.js";
 import { verifyCond } from "./stateCond.js";
@@ -368,12 +369,156 @@ describe("scheduler", () => {
       });
     });
 
+    describe("pathIsValid", () => {
+      const validationStates = createStates([
+        { id: "1" },
+        { id: "2" },
+        { id: "3" },
+        { id: "4" },
+      ]);
+      const validationResources = ["apples" as const];
+      const validationEdges = createEdges(
+        [
+          {
+            from: "1",
+            to: "2",
+            name: "1-to-2",
+            action: () => {
+              console.log("1-to-2");
+            },
+          },
+          {
+            from: "2",
+            to: "3",
+            name: "2-to-3",
+            action: () => {
+              console.log("2-to-3");
+            },
+          },
+          {
+            from: "3",
+            to: "2",
+            name: "3-to-2",
+            resourceEffects: { apples: 1 },
+            action: () => {
+              console.log("3-to-2");
+            },
+          },
+          {
+            from: "3",
+            to: "4",
+            name: "3-to-4",
+            condition: { resource: "apples", value: 1, operator: "gt" },
+            action: () => {
+              console.log("3-to-4");
+            },
+          },
+          {
+            from: "4",
+            to: "4",
+            name: "4-to-4",
+            resourceEffects: { apples: -1 },
+            action: () => {
+              console.log("4-to-4");
+            },
+          },
+        ],
+        validationStates,
+        validationResources
+      );
+      const validationGraph = initGraph(
+        validationStates,
+        validationEdges,
+        validationResources
+      );
+
+      it("should return false if there is no contiguous path through the graph", () => {
+        expect(
+          pathIsValid(validationGraph, [
+            { edgeName: "1-to-2", type: "action" },
+            // path jumps
+            { edgeName: "3-to-4", type: "action" },
+            // path jumps
+            { edgeName: "2-to-3", type: "action" },
+            { edgeName: "3-to-2", type: "action" },
+            { edgeName: "4-to-4", type: "action" },
+            { edgeName: "4-to-4", type: "cleanup" },
+          ])
+        ).toBe(false);
+      });
+
+      it("should return false if conditional edges are not respected", () => {
+        expect(
+          pathIsValid(validationGraph, [
+            { edgeName: "1-to-2", type: "action" },
+            { edgeName: "2-to-3", type: "action" },
+            { edgeName: "3-to-2", type: "action" },
+            { edgeName: "2-to-3", type: "prep" },
+            // fails to loop twice
+            { edgeName: "3-to-4", type: "action" },
+            { edgeName: "4-to-4", type: "action" },
+            { edgeName: "4-to-4", type: "cleanup" },
+          ])
+        ).toBe(false);
+      });
+
+      it("should return false if steps don't end with an empty pack", () => {
+        expect(
+          pathIsValid(validationGraph, [
+            { edgeName: "1-to-2", type: "action" },
+            { edgeName: "2-to-3", type: "action" },
+            { edgeName: "3-to-2", type: "action" },
+            { edgeName: "2-to-3", type: "prep" },
+            { edgeName: "3-to-2", type: "prep" },
+            { edgeName: "2-to-3", type: "prep" },
+            { edgeName: "3-to-4", type: "action" },
+            { edgeName: "4-to-4", type: "action" },
+            // doesn't fully cleanup
+          ])
+        ).toBe(false);
+      });
+
+      it("should return false if every edge doesn't have exactly one 'action' step", () => {
+        expect(
+          pathIsValid(validationGraph, [
+            { edgeName: "1-to-2", type: "action" },
+            { edgeName: "2-to-3", type: "action" },
+            { edgeName: "3-to-2", type: "action" },
+            { edgeName: "2-to-3", type: "action" },
+            // second 3-to-2
+            { edgeName: "3-to-2", type: "action" },
+            // second 2-to-3
+            { edgeName: "2-to-3", type: "action" },
+            { edgeName: "3-to-4", type: "action" },
+            { edgeName: "4-to-4", type: "action" },
+            // second 4-to-4
+            { edgeName: "4-to-4", type: "action" },
+          ])
+        ).toBe(false);
+      });
+
+      it("should return true if all validations pass", () => {
+        expect(
+          pathIsValid(validationGraph, [
+            { edgeName: "1-to-2", type: "action" },
+            { edgeName: "2-to-3", type: "action" },
+            { edgeName: "3-to-2", type: "action" },
+            { edgeName: "2-to-3", type: "prep" },
+            { edgeName: "3-to-2", type: "prep" },
+            { edgeName: "2-to-3", type: "prep" },
+            { edgeName: "3-to-4", type: "action" },
+            { edgeName: "4-to-4", type: "action" },
+            { edgeName: "4-to-4", type: "cleanup" },
+          ])
+        ).toBe(true);
+      });
+    });
+
     const prepSteps = () => {
       const steps = runScheduler(goodGraph);
       const edges = goodGraph.getEdges();
-      const keyedEdges = _.keyBy(edges, "name");
       return steps.map((step) => {
-        const edge = keyedEdges[step.edgeName];
+        const edge = edges[step.edgeName];
         if (_.isNil(edge)) throw new Error("Edge not found");
         return { ...step, edge };
       });

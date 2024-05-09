@@ -23,7 +23,7 @@ import {
   ValueOf,
   preparePack,
 } from "./graph.js";
-import { interlace } from "./utils.js";
+import { adjacentPairs, interlace } from "./utils.js";
 
 // Check if all states are reachable from starting states
 const traversabilityCheck = <
@@ -150,6 +150,9 @@ const conditionalPropagationBfs = <
   successPredicate: (
     edge: ConditionalPropagationBfsHorizonEdge<StateId, EdgeName, R>
   ) => boolean,
+  // TODO consider grouping with propagatedNextHorizonValidityPredicate (labeled
+  // "before" and "after"?).
+  //
   // if defined, filters by valid conditions before they are propagated
   unpropagatedConditionPredicate?: (
     condition: HorizonEdgeCondition<R>
@@ -294,7 +297,7 @@ const conditionalPropagationBfs = <
   );
 };
 
-const traceHorizonPath = <
+const traceValidPathThroughHorizons = <
   StateId extends string,
   S extends State<StateId>,
   EdgeName extends string,
@@ -303,10 +306,11 @@ const traceHorizonPath = <
 >(
   graph: Graph<StateId, S, EdgeName, R>,
   horizons: H[][],
-  isNeighbour: (
+  isNeighbourWithPrev: (
     prevEdge: Edges<AllEdgeNames<StateId, EdgeName, R>, S[], R>[number],
     currEdge: Edges<AllEdgeNames<StateId, EdgeName, R>, S[], R>[number]
   ) => boolean,
+  // TODO consider just filtering before passing
   firstHorizonFilter: (horizon: H) => boolean = () => true,
   validationFilter: (horizon: H) => boolean = () => true,
   onValidEdgeFound?: (validEdge: H) => void
@@ -321,7 +325,7 @@ const traceHorizonPath = <
       (horizon) =>
         (!_.isNil(previousEdgeName) || firstHorizonFilter(horizon)) &&
         (_.isNil(previousEdgeName) ||
-          isNeighbour(edges[previousEdgeName], edges[horizon.name])) &&
+          isNeighbourWithPrev(edges[previousEdgeName], edges[horizon.name])) &&
         validationFilter(horizon)
     );
     // TODO track multiple valid routes?
@@ -336,7 +340,8 @@ const traceHorizonPath = <
   });
 };
 
-const traceHorizonPathWithConditionPack = <
+// TODO consider and confirm merging this with traceValidPathThroughHorizons
+const traceValidPathThroughHorizonsWithPack = <
   StateId extends string,
   S extends State<StateId>,
   EdgeName extends string,
@@ -344,7 +349,7 @@ const traceHorizonPathWithConditionPack = <
 >(
   graph: Graph<StateId, S, EdgeName, R>,
   horizons: Horizon<AllEdgeNames<StateId, EdgeName, R>, R>[],
-  isNeighbour: Parameters<typeof traceHorizonPath>[2],
+  isNeighbourWithPrev: Parameters<typeof traceValidPathThroughHorizons>[2],
   firstHorizonFilter: (
     horizonEdge: Horizon<AllEdgeNames<StateId, EdgeName, R>, R>[number]
   ) => boolean,
@@ -355,10 +360,10 @@ const traceHorizonPathWithConditionPack = <
 
   const { pack: effectPack, applyResourceEffects } = preparePack(graph);
 
-  return traceHorizonPath(
+  return traceValidPathThroughHorizons(
     graph,
     horizons,
-    isNeighbour,
+    isNeighbourWithPrev,
     firstHorizonFilter,
     (edge) => {
       const cond = edge.condition;
@@ -436,7 +441,7 @@ export const getConditionalPaths = <
         graph,
         CONDITIONAL_ITER_LIMIT,
         initialBackpropHorizon,
-        (neighbour) => _.filter(explicitEdges, (e) => e.to === neighbour.from),
+        (neighbour) => _.filter(allEdges, (e) => e.to === neighbour.from),
         (packValue, effectValue) => packValue - effectValue,
         ({ condition }) =>
           _.isNil(condition) || edgeConditionIsSatisfiable(condition),
@@ -461,7 +466,7 @@ export const getConditionalPaths = <
 
       return {
         edgeName: conditionalEdge.name,
-        path: traceHorizonPathWithConditionPack(
+        path: traceValidPathThroughHorizonsWithPack(
           graph,
           horizons,
           (prevEdge, currEdge) => prevEdge.to === currEdge.from,
@@ -586,7 +591,7 @@ export const getNonConditionalPaths = <
               conditionalEdgeFound[conditionalEdgeName] = {
                 // lop off the head. the conditional path includes its own edge
                 pathToNonConditional: _.tail(
-                  traceHorizonPath(
+                  traceValidPathThroughHorizons(
                     graph,
                     _.map(horizons, (horizon) =>
                       _.map(horizon, (h) => ({ name: h }))
@@ -665,7 +670,7 @@ export const getNonConditionalPaths = <
 
       return {
         edgeName: nonConditionalEdge.name,
-        path: traceHorizonPath(
+        path: traceValidPathThroughHorizons(
           graph,
           _.map(allHorizons, (horizon) => _.map(horizon, (h) => ({ name: h }))),
           (prevEdge, currEdge) => prevEdge.to === currEdge.from,
@@ -761,7 +766,7 @@ const getCleanupPath = <
     );
 
     return _.reverse(
-      traceHorizonPathWithConditionPack(
+      traceValidPathThroughHorizonsWithPack(
         graph,
         // ignore first element since it's the edge to clean
         _.tail(allHorizons).map((horizon) =>
@@ -912,6 +917,105 @@ export interface Step<EdgeName extends string> {
   type: "prep" | "action" | "cleanup";
 }
 
+const verifyPathIsContiguous = <
+  StateId extends string,
+  S extends State<StateId>,
+  EdgeName extends string,
+  Resource extends string
+>(
+  graph: Graph<StateId, S, EdgeName, Resource>,
+  path: Step<AllEdgeNames<StateId, EdgeName, Resource>>[]
+) => {
+  const edges = graph.getEdges();
+
+  const neighbourSteps = adjacentPairs(path);
+  return (
+    neighbourSteps.isSolo ||
+    _.every(
+      neighbourSteps.pairs,
+      ([a, b]) => edges[a.edgeName].to === edges[b.edgeName].from
+    )
+  );
+};
+const verifyPathRespectsConditionals = <
+  StateId extends string,
+  S extends State<StateId>,
+  EdgeName extends string,
+  Resource extends string
+>(
+  graph: Graph<StateId, S, EdgeName, Resource>,
+  path: Step<AllEdgeNames<StateId, EdgeName, Resource>>[]
+) => {
+  const edges = graph.getEdges();
+  const allResources = graph.getResources();
+
+  const { pack, applyResourceEffects } = preparePack(graph);
+
+  return _.every(path, ({ edgeName }) => {
+    const edge = edges[edgeName];
+    const resourceEffects = edge.resourceEffects;
+    const edgeCondition = edge.condition;
+
+    const packIsValidForEdge =
+      _.isNil(edgeCondition) ||
+      _.every(allResources, (r) => verifyCond(pack[r], r, edgeCondition));
+
+    applyResourceEffects(resourceEffects, (prev, value) => prev + value);
+
+    return packIsValidForEdge;
+  });
+};
+const verifyPathEndsWithEmptyPack = <
+  StateId extends string,
+  S extends State<StateId>,
+  EdgeName extends string,
+  Resource extends string
+>(
+  graph: Graph<StateId, S, EdgeName, Resource>,
+  path: Step<AllEdgeNames<StateId, EdgeName, Resource>>[]
+) => {
+  const edges = graph.getEdges();
+  const allResources = graph.getResources();
+
+  const { pack, applyResourceEffects } = preparePack(graph);
+
+  _.forEach(path, ({ edgeName }) => {
+    const edge = edges[edgeName];
+    applyResourceEffects(edge.resourceEffects, (prev, value) => prev + value);
+  });
+
+  return _.every(allResources, (r) => pack[r] === 0);
+};
+const verifyEveryExplicitEdgeHasOneActionStep = <
+  StateId extends string,
+  S extends State<StateId>,
+  EdgeName extends string,
+  Resource extends string
+>(
+  graph: Graph<StateId, S, EdgeName, Resource>,
+  path: Step<AllEdgeNames<StateId, EdgeName, Resource>>[]
+) => {
+  const edges = graph.getEdges(true);
+  const filteredPath = _.filter(path, ({ type }) => type === "action");
+  return _.size(edges) === filteredPath.length;
+};
+export const pathIsValid = <
+  StateId extends string,
+  S extends State<StateId>,
+  EdgeName extends string,
+  Resource extends string
+>(
+  graph: Graph<StateId, S, EdgeName, Resource>,
+  path: Step<AllEdgeNames<StateId, EdgeName, Resource>>[]
+) => {
+  if (!verifyPathIsContiguous(graph, path)) return false;
+  if (!verifyPathRespectsConditionals(graph, path)) return false;
+  if (!verifyPathEndsWithEmptyPack(graph, path)) return false;
+  if (!verifyEveryExplicitEdgeHasOneActionStep(graph, path)) return false;
+
+  return true;
+};
+
 // produce a list of edge action and cleanup steps that trace a path through the
 // graph
 //
@@ -966,5 +1070,10 @@ export const runScheduler = <
   );
 
   console.log("Synthesizing total path");
-  return constructTotalPath(graph, routes);
+  const totalPath = constructTotalPath(graph, routes);
+
+  if (!pathIsValid(graph, totalPath))
+    throw new Error("Constructed an invalid path");
+
+  return totalPath;
 };
