@@ -1,7 +1,7 @@
-import { Graph, State, initGraph } from "./graph.js";
+import { Graph, State, verifyIsGraph } from "./graph.js";
 import { Step, runScheduler } from "./scheduler.js";
-import { states, edges, resources } from "./state.js";
 import _ from "lodash";
+import path from "path";
 
 const runSteps = <
   StateId extends string,
@@ -23,7 +23,13 @@ const runSteps = <
 async function main() {
   console.log("Starting");
   try {
-    const graph = initGraph(states, edges, resources);
+    const graph = verifyIsGraph(
+      (
+        await import(
+          path.join(path.dirname(import.meta.url), "..", "graph.config.ts")
+        )
+      ).default
+    );
 
     console.log("Running Scheduler");
     const steps = runScheduler(graph);

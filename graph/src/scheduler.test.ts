@@ -1,10 +1,5 @@
 import _ from "lodash";
-import {
-  ResourceEffects,
-  createEdges,
-  createStates,
-  initGraph,
-} from "./graph.js";
+import { ResourceEffects, initGraph } from "./graph.js";
 import {
   getConditionalPaths,
   getNonConditionalPaths,
@@ -14,15 +9,12 @@ import {
 import { verifyCond } from "./stateCond.js";
 
 describe("scheduler", () => {
-  const states = createStates([
-    { id: "1", url: "start" },
-    { id: "2", url: "start" },
-    { id: "3", url: "start" },
-  ]);
-
-  const resources = ["apples" as const, "bananas" as const];
-
-  const e = createEdges(
+  const goodGraph = initGraph(
+    [
+      { id: "1", url: "start" },
+      { id: "2", url: "start" },
+      { id: "3", url: "start" },
+    ] as const,
     [
       {
         from: "1",
@@ -77,13 +69,11 @@ describe("scheduler", () => {
           console.log("go-to-1-from-3");
         },
       },
-    ],
-    states,
-    resources
+    ] as const,
+    ["apples", "bananas"] as const
   );
 
-  const goodGraph = initGraph(states, e, resources);
-
+  const resources = goodGraph.getResources();
   type Resource = (typeof resources)[number];
   const preparePack = () => {
     const pack: Partial<Record<Resource, number>> = {};
@@ -278,13 +268,8 @@ describe("scheduler", () => {
         // construct a graph that produces a case where the path for one
         // conditional edge is shorter than the path for another conditional
         // edge, but the shorter path if taken does not respect edge conditions
-        const minimalStates = createStates([
-          { id: "1" },
-          { id: "2" },
-          { id: "3", url: "start" },
-        ]);
-        const minimalResources = ["apples" as const];
-        const minimalEdges = createEdges(
+        const minimalGraph = initGraph(
+          [{ id: "1" }, { id: "2" }, { id: "3", url: "start" }] as const,
           [
             {
               from: "1",
@@ -331,32 +316,26 @@ describe("scheduler", () => {
                 console.log("go-to-1-from-3");
               },
             },
-          ],
-          minimalStates,
-          minimalResources
+          ] as const,
+          ["apples" as const]
         );
+        const minimalResources = minimalGraph.getResources();
 
-        const goodGraph = initGraph(
-          minimalStates,
-          minimalEdges,
-          minimalResources
-        );
-
-        const conditionalPaths = getConditionalPaths(goodGraph);
+        const conditionalPaths = getConditionalPaths(minimalGraph);
         if (conditionalPaths === false)
           throw new Error("Graph is not satisfiable");
         const nonConditionalPaths = getNonConditionalPaths(
-          goodGraph,
+          minimalGraph,
           conditionalPaths
         );
-        const edges = goodGraph.getEdges();
+        const edges = minimalGraph.getEdges();
         const keyedEdges = _.keyBy(edges, "name");
         _.each(nonConditionalPaths, (step) => {
           const { pack, applyResourceEffect } = preparePack();
           _.each(step.path, (pathStep) => {
             const edge = keyedEdges[pathStep];
             if (_.isNil(edge)) throw new Error("Edge not found");
-            _.each(resources, (resource) => {
+            _.each(minimalResources, (resource) => {
               expect(
                 _.isNil(edge.condition) ||
                   verifyCond(pack[resource] ?? 0, resource, edge.condition)
@@ -370,14 +349,8 @@ describe("scheduler", () => {
     });
 
     describe("pathIsValid", () => {
-      const validationStates = createStates([
-        { id: "1" },
-        { id: "2" },
-        { id: "3" },
-        { id: "4" },
-      ]);
-      const validationResources = ["apples" as const];
-      const validationEdges = createEdges(
+      const validationGraph = initGraph(
+        [{ id: "1" }, { id: "2" }, { id: "3" }, { id: "4" }] as const,
         [
           {
             from: "1",
@@ -422,14 +395,8 @@ describe("scheduler", () => {
               console.log("4-to-4");
             },
           },
-        ],
-        validationStates,
-        validationResources
-      );
-      const validationGraph = initGraph(
-        validationStates,
-        validationEdges,
-        validationResources
+        ] as const,
+        ["apples" as const]
       );
 
       it("should return false if there is no contiguous path through the graph", () => {

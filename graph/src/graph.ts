@@ -9,10 +9,6 @@ export interface State<ID extends string> {
   navigable?: boolean;
 }
 
-export const createStates = <ID extends string>(states: State<ID>[]) => {
-  return states;
-};
-
 export type EdgeCondition<Resource extends string> = {
   resource: Resource;
   value: number;
@@ -46,23 +42,6 @@ export type Edges<
   Resource extends string | null = null
 > = BaseEdge<EdgeName, States[number]["id"], Resource>[];
 
-export const createEdges = <
-  EdgeName extends string,
-  StateId extends string,
-  States extends State<StateId>,
-  Resource extends string | undefined = undefined
->(
-  edges: Edges<
-    EdgeName,
-    States[],
-    Resource extends undefined ? null : Resource
-  >,
-  states: States[],
-  resources?: Resource[]
-) => {
-  return edges;
-};
-
 // TODO nice things for a not a monad -- all clones of the actual underlying
 // - keyed edges -- with 1-to-1 guarantees
 // - keyed states -- with 1-to-1 guarantees
@@ -94,6 +73,8 @@ type GetEdges<
   (excludeImplicit: true): OnlyExplicitEdgesResult<StateId, EdgeName, Resource>;
 };
 
+type TrueStringLiterals<T extends string> = string extends T ? never : true;
+
 export interface Graph<
   StateId extends string,
   S extends State<StateId>,
@@ -106,6 +87,7 @@ export interface Graph<
   getNavigableStates: () => S[];
   getResources: () => Resource[];
 }
+// TODO ensure generics are always string literals
 export const initGraph: <
   StateId extends string,
   S extends State<StateId>,
@@ -222,4 +204,16 @@ export const preparePack = <
   };
 
   return { pack, updatePack, applyResourceEffects };
+};
+
+// TODO matches schema
+export const verifyIsGraph = <
+  StateId extends string,
+  S extends State<StateId>,
+  EdgeName extends string,
+  Resource extends string
+>(
+  candidate: unknown
+): Graph<StateId, S, EdgeName, Resource> => {
+  return candidate as Graph<StateId, S, EdgeName, Resource>;
 };

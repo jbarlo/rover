@@ -1,21 +1,13 @@
-import { createEdges, createStates } from "./graph.js";
-
-// TODO ensure unique IDs
-export const states = createStates([
-  { id: "1" },
-  { id: "2", url: "start" },
-  { id: "3" },
-]);
+import { initGraph } from "./src/graph.js";
 
 // TODO possible configs:
 //  - gte/lte
 //  - nonnegative resource? all edges with that resource in the condition gets
 //    anded with >=0?
 
-// TODO would be nice to generate this from types
-export const resources = ["apples" as const, "bananas" as const];
-
-export const edges = createEdges(
+export default initGraph(
+  // TODO ensure unique IDs
+  [{ id: "1" }, { id: "2", url: "start" }, { id: "3" }],
   [
     {
       from: "1",
@@ -71,6 +63,6 @@ export const edges = createEdges(
       },
     },
   ],
-  states,
-  resources
+  // TODO would be nice to generate this from types
+  ["apples" as const, "bananas" as const]
 );
