@@ -1,5 +1,5 @@
 import { Cond, combineCond } from "./cond.js";
-import _, { initial } from "lodash";
+import _ from "lodash";
 import {
   HorizonEdgeCondition,
   edgeConditionIsSatisfiable,

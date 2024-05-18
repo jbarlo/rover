@@ -10,13 +10,14 @@ const runSteps = <
   Resource extends string
 >(
   steps: Step<AllEdgeNames<StateId, EdgeName, Resource>>[],
-  graph: Graph<StateId, S, EdgeName, Resource>
+  conf: Configure<StateId, S, EdgeName, Resource>
 ) => {
-  const edges = graph.getEdges();
-  // run each edge's prep, action, and cleanup -- do snapshotting, etc
+  const edges = conf.graph.getEdges();
   _.forEach(steps, (step) => {
+    conf.beforeEach?.();
     const edge = edges[step.edgeName]!;
     edge.action();
+    conf.afterEach?.();
   });
 };
 
@@ -36,7 +37,7 @@ const runner = <
     console.log("Scheduler Complete!");
 
     console.log("Running...");
-    runSteps<StateId, S, EdgeName, Resource>(steps, conf.graph);
+    runSteps<StateId, S, EdgeName, Resource>(steps, conf);
     console.log("Done");
   } catch (e) {
     console.error(e);

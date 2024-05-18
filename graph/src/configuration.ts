@@ -13,6 +13,8 @@ export interface InputConfigure<
   Resource extends string
 > {
   graph: GraphConfInput<StateId, S, EdgeName, Resource>;
+  beforeEach?: () => void;
+  afterEach?: () => void;
 }
 
 const makeConfigureSchema = <

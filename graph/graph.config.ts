@@ -6,6 +6,8 @@ import { configure } from "./src/configuration.js";
 //    anded with >=0?
 
 export default configure({
+  beforeEach: () => {},
+  afterEach: () => {},
   graph: {
     // TODO ensure unique IDs
     states: [
