@@ -1,10 +1,10 @@
 import runner from "./graphRunner.js";
 import _ from "lodash";
 import path from "path";
-import { verifyIsConfig } from "./configuration.js";
+import { initConfiguration } from "./configuration.js";
 
 async function main() {
-  const config = verifyIsConfig(
+  const config = initConfiguration(
     (
       await import(
         path.join(path.dirname(import.meta.url), "..", "graph.config.ts")

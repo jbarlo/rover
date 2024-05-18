@@ -30,23 +30,30 @@ const makeConfigureSchema = <
 };
 
 // TODO perform in an actually typechecked way
-export const verifyIsConfig = <
+export const verifyIsConfig = (candidate: unknown) => {
+  try {
+    const schema = makeConfigureSchema(candidate as any);
+    schema.parse(candidate);
+  } catch (e) {
+    console.error(e);
+    throw new Error("Not a valid configuration");
+  }
+};
+
+// Mainly to get intellisense in config file
+export const configure = <
   StateId extends string,
   S extends State<StateId>,
   EdgeName extends string,
   Resource extends string
 >(
-  candidate: unknown
+  conf: InputConfigure<StateId, S, EdgeName, Resource>
 ) => {
-  try {
-    const schema = makeConfigureSchema(candidate as any);
-    return schema.parse(candidate);
-  } catch {
-    throw new Error("Not a valid configuration");
-  }
+  verifyIsConfig(conf);
+  return conf;
 };
 
-export const configure = <
+export const initConfiguration = <
   StateId extends string,
   S extends State<StateId>,
   EdgeName extends string,
@@ -63,4 +70,4 @@ export type Configure<
   S extends State<StateId>,
   EdgeName extends string,
   Resource extends string
-> = ReturnType<typeof configure<StateId, S, EdgeName, Resource>>;
+> = ReturnType<typeof initConfiguration<StateId, S, EdgeName, Resource>>;
