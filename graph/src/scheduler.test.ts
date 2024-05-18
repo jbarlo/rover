@@ -9,13 +9,13 @@ import {
 import { verifyCond } from "./stateCond.js";
 
 describe("scheduler", () => {
-  const goodGraph = initGraph(
-    [
+  const goodGraph = initGraph({
+    states: [
       { id: "1", url: "start" },
       { id: "2", url: "start" },
       { id: "3", url: "start" },
     ] as const,
-    [
+    edges: [
       {
         from: "1",
         to: "1",
@@ -70,8 +70,8 @@ describe("scheduler", () => {
         },
       },
     ] as const,
-    ["apples", "bananas"] as const
-  );
+    resources: ["apples", "bananas"] as const,
+  });
 
   const resources = goodGraph.getResources();
   type Resource = (typeof resources)[number];
@@ -268,9 +268,13 @@ describe("scheduler", () => {
         // construct a graph that produces a case where the path for one
         // conditional edge is shorter than the path for another conditional
         // edge, but the shorter path if taken does not respect edge conditions
-        const minimalGraph = initGraph(
-          [{ id: "1" }, { id: "2" }, { id: "3", url: "start" }] as const,
-          [
+        const minimalGraph = initGraph({
+          states: [
+            { id: "1" },
+            { id: "2" },
+            { id: "3", url: "start" },
+          ] as const,
+          edges: [
             {
               from: "1",
               to: "1",
@@ -317,8 +321,8 @@ describe("scheduler", () => {
               },
             },
           ] as const,
-          ["apples" as const]
-        );
+          resources: ["apples" as const],
+        });
         const minimalResources = minimalGraph.getResources();
 
         const conditionalPaths = getConditionalPaths(minimalGraph);
@@ -349,9 +353,9 @@ describe("scheduler", () => {
     });
 
     describe("pathIsValid", () => {
-      const validationGraph = initGraph(
-        [{ id: "1" }, { id: "2" }, { id: "3" }, { id: "4" }] as const,
-        [
+      const validationGraph = initGraph({
+        states: [{ id: "1" }, { id: "2" }, { id: "3" }, { id: "4" }] as const,
+        edges: [
           {
             from: "1",
             to: "2",
@@ -396,8 +400,8 @@ describe("scheduler", () => {
             },
           },
         ] as const,
-        ["apples" as const]
-      );
+        resources: ["apples" as const],
+      });
 
       it("should return false if there is no contiguous path through the graph", () => {
         expect(
