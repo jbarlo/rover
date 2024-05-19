@@ -181,7 +181,7 @@ export interface GraphConfInput<
   states: S[];
   edges: Edges<EdgeName, S[], Resource>;
   resources: Resource[];
-  implicitEdgeAction?: () => void;
+  implicitEdgeAction?: BaseEdge<ImplicitEdge<StateId>, S, Resource>["action"];
 }
 
 export const makeGraphInputSchemaFromInputLiterals = <
@@ -244,7 +244,7 @@ export const initGraph: <
     _.compact(
       _.map(getStates(), (otherState) => {
         if (navState.id === otherState.id) return null;
-        const implicitEdge = {
+        const implicitEdge: BaseEdge<ImplicitEdge<S["id"]>, S, Resource> = {
           from: otherState.id,
           to: navState.id,
           // TODO guarantee uniqueness
