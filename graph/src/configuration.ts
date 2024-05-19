@@ -1,10 +1,24 @@
 import { z } from "zod";
 import {
+  AllEdgeName,
+  ExplicitEdgesOnly,
+  Graph,
   GraphConfInput,
   State,
   initGraph,
   makeGraphInputSchemaFromInputLiterals,
 } from "./graph.js";
+import { Step } from "./scheduler.js";
+
+export interface InputConfigureContext<
+  StateId extends string,
+  S extends State<StateId>,
+  EdgeName extends string,
+  Resource extends string
+> {
+  steps: Step<AllEdgeName<EdgeName, S["id"]>>[];
+  graph: Graph<S["id"], S, ExplicitEdgesOnly<EdgeName>, Resource>;
+}
 
 export interface InputConfigure<
   StateId extends string,
@@ -13,10 +27,18 @@ export interface InputConfigure<
   Resource extends string
 > {
   graph: GraphConfInput<StateId, S, EdgeName, Resource>;
-  beforeEach?: () => void;
-  afterEach?: () => void;
-  beforeAll?: () => void;
-  afterAll?: () => void;
+  beforeEach?: (
+    context: InputConfigureContext<StateId, S, EdgeName, Resource>
+  ) => void;
+  afterEach?: (
+    context: InputConfigureContext<StateId, S, EdgeName, Resource>
+  ) => void;
+  beforeAll?: (
+    context: InputConfigureContext<StateId, S, EdgeName, Resource>
+  ) => void;
+  afterAll?: (
+    context: InputConfigureContext<StateId, S, EdgeName, Resource>
+  ) => void;
 }
 
 const makeConfigureSchema = <

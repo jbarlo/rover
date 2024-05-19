@@ -1,4 +1,4 @@
-import { Configure } from "./configuration.js";
+import { Configure, InputConfigureContext } from "./configuration.js";
 import { AllEdgeName, State } from "./graph.js";
 import { Step, runScheduler } from "./scheduler.js";
 import _ from "lodash";
@@ -13,14 +13,18 @@ const runSteps = <
   conf: Configure<S["id"], S, EdgeName, Resource>
 ) => {
   const edges = conf.graph.getAllEdges();
-  conf.beforeAll?.();
+  const context: InputConfigureContext<StateId, S, EdgeName, Resource> = {
+    steps,
+    graph: conf.graph,
+  };
+  conf.beforeAll?.(context);
   _.forEach(steps, (step) => {
-    conf.beforeEach?.();
+    conf.beforeEach?.(context);
     const edge = edges[step.edgeName]!;
     edge.action({ edge, graph: conf.graph });
-    conf.afterEach?.();
+    conf.afterEach?.(context);
   });
-  conf.afterAll?.();
+  conf.afterAll?.(context);
 };
 
 const runner = <
