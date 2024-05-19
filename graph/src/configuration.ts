@@ -15,6 +15,8 @@ export interface InputConfigure<
   graph: GraphConfInput<StateId, S, EdgeName, Resource>;
   beforeEach?: () => void;
   afterEach?: () => void;
+  beforeAll?: () => void;
+  afterAll?: () => void;
 }
 
 const makeConfigureSchema = <
@@ -55,6 +57,7 @@ export const configure = <
   return conf;
 };
 
+// TODO these init functions are ideally zod transforms
 export const initConfiguration = <
   StateId extends string,
   S extends State<StateId>,

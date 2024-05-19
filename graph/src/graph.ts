@@ -48,13 +48,21 @@ const makeEdgeConditionSchema = <T extends SoloOrUnionSchema<any>>(
 
 export type ResourceEffects<R extends string> = Partial<Record<R, number>>;
 
+export interface ActionContext<
+  EdgeName extends string,
+  S extends State<string>,
+  Resource extends string
+> {
+  edge: BaseEdge<AllEdgeNames<EdgeName, S["id"]>, S, Resource>;
+  graph: Graph<S["id"], S, ExplicitEdgesOnly<EdgeName>, Resource>;
+}
 interface BaseEdge<
   EdgeName extends string,
-  ID extends string,
-  Resource extends string | null = null
+  S extends State<string>,
+  Resource extends string
 > {
-  from: ID;
-  to: ID;
+  from: S["id"];
+  to: S["id"];
   name: EdgeName;
   // the changes made to resources through the action
   resourceEffects?: Resource extends string
@@ -63,7 +71,7 @@ interface BaseEdge<
   condition?: Resource extends string
     ? Cond<EdgeCondition<Resource>>
     : undefined;
-  action: () => void;
+  action: (context: ActionContext<EdgeName, S, Resource>) => void;
 }
 const makeEdgeSchema = <
   StateIdSchema extends SoloOrUnionSchema<any>,
@@ -87,8 +95,8 @@ const makeEdgeSchema = <
 export type Edges<
   EdgeName extends string,
   States extends State<string>[],
-  Resource extends string | null = null
-> = BaseEdge<EdgeName, States[number]["id"], Resource>[];
+  Resource extends string
+> = BaseEdge<EdgeName, States[number], Resource>[];
 
 // TODO nice things for a not a monad -- all clones of the actual underlying
 // - keyed edges -- with 1-to-1 guarantees
@@ -97,28 +105,36 @@ export type Edges<
 // - all resources
 type ImplicitEdge<StateId extends string> = `implicit-${StateId}-to-${StateId}`;
 
+export type AllEdgeNames<EdgeName extends string, StateId extends string> =
+  | EdgeName
+  | ImplicitEdge<StateId>;
+
+type ExplicitEdgesOnly<T extends string> = T extends ImplicitEdge<any>
+  ? never
+  : T;
+
 type GetEdgesResult<
-  StateId extends string,
+  S extends State<string>,
   EdgeName extends string,
   Resource extends string
-> = Record<EdgeName, BaseEdge<EdgeName, StateId, Resource>>;
+> = Record<EdgeName, BaseEdge<EdgeName, S, Resource>>;
 export type AllEdgesResult<
-  StateId extends string,
+  S extends State<string>,
   EdgeName extends string,
   Resource extends string
-> = GetEdgesResult<StateId, EdgeName | ImplicitEdge<StateId>, Resource>;
+> = GetEdgesResult<S, AllEdgeNames<EdgeName, S["id"]>, Resource>;
 export type OnlyExplicitEdgesResult<
-  StateId extends string,
+  S extends State<string>,
   EdgeName extends string,
   Resource extends string
-> = GetEdgesResult<StateId, EdgeName, Resource>;
+> = GetEdgesResult<S, EdgeName, Resource>;
 type GetEdges<
-  StateId extends string,
+  S extends State<string>,
   EdgeName extends string,
   Resource extends string
 > = {
-  (excludeImplicit?: false): AllEdgesResult<StateId, EdgeName, Resource>;
-  (excludeImplicit: true): OnlyExplicitEdgesResult<StateId, EdgeName, Resource>;
+  (excludeImplicit?: false): AllEdgesResult<S, EdgeName, Resource>;
+  (excludeImplicit: true): OnlyExplicitEdgesResult<S, EdgeName, Resource>;
 };
 
 export const makeGraphInputSchema = <
@@ -165,6 +181,7 @@ export interface GraphConfInput<
   states: S[];
   edges: Edges<EdgeName, S[], Resource>;
   resources: Resource[];
+  implicitEdgeAction?: () => void;
 }
 
 export const makeGraphInputSchemaFromInputLiterals = <
@@ -187,13 +204,14 @@ export interface Graph<
   EdgeName extends string,
   Resource extends string
 > {
-  getEdges: GetEdges<StateId, EdgeName, Resource>;
-  getImplicitEdges: () => BaseEdge<ImplicitEdge<StateId>, StateId, Resource>[];
+  getEdges: GetEdges<S, EdgeName, Resource>;
+  getImplicitEdges: () => BaseEdge<ImplicitEdge<StateId>, S, Resource>[];
   getStates: () => S[];
   getNavigableStates: () => S[];
   getResources: () => Resource[];
 }
 // TODO ensure generics are always string literals
+// TODO these init functions are ideally zod transforms
 export const initGraph: <
   StateId extends string,
   S extends State<StateId>,
@@ -216,7 +234,6 @@ export const initGraph: <
     Resource
   >(conf);
   // Validate
-  // TODO replace this func with a transform
   schema.parse(conf);
 
   const getStates = () => _.cloneDeep(states);
@@ -232,8 +249,7 @@ export const initGraph: <
           to: navState.id,
           // TODO guarantee uniqueness
           name: `implicit-${otherState.id}-to-${navState.id}` as const,
-          // TODO internal type to avoid action?
-          action: () => {},
+          action: conf.implicitEdgeAction ?? (() => {}),
         };
         return implicitEdge;
       })
@@ -242,20 +258,20 @@ export const initGraph: <
 
   const getImplicitEdges = () => _.cloneDeep(implicitEdges);
 
-  const getEdges: GetEdges<StateId, EdgeName, Resource> = (
+  const getEdges: GetEdges<S, EdgeName, Resource> = (
     excludeImplicit = false
   ) => {
     if (excludeImplicit) {
       const toReturn = _.keyBy(
         _.cloneDeep(edges),
         "name"
-      ) as OnlyExplicitEdgesResult<StateId, EdgeName, Resource>; // TODO typing
+      ) as OnlyExplicitEdgesResult<S, EdgeName, Resource>; // TODO typing
       return toReturn as any; // concession for function overload
     }
     const toReturn = _.keyBy(
       [..._.cloneDeep(edges), ...getImplicitEdges()],
       "name"
-    ) as AllEdgesResult<StateId, EdgeName, Resource>; // TODO typing
+    ) as AllEdgesResult<S, EdgeName, Resource>; // TODO typing
     return toReturn as any; // concession for function overload
   };
 
@@ -269,12 +285,6 @@ export const initGraph: <
 };
 
 export type ValueOf<T> = T[keyof T];
-
-export type AllEdgeNames<
-  StateId extends string,
-  EdgeName extends string,
-  Resource extends string
-> = ValueOf<AllEdgesResult<StateId, EdgeName, Resource>>["name"];
 
 export const preparePack = <
   StateId extends string,

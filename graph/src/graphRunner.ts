@@ -9,16 +9,18 @@ const runSteps = <
   EdgeName extends string,
   Resource extends string
 >(
-  steps: Step<AllEdgeNames<StateId, EdgeName, Resource>>[],
-  conf: Configure<StateId, S, EdgeName, Resource>
+  steps: Step<AllEdgeNames<EdgeName, S["id"]>>[],
+  conf: Configure<S["id"], S, EdgeName, Resource>
 ) => {
   const edges = conf.graph.getEdges();
+  conf.beforeAll?.();
   _.forEach(steps, (step) => {
     conf.beforeEach?.();
     const edge = edges[step.edgeName]!;
-    edge.action();
+    edge.action({ edge, graph: conf.graph });
     conf.afterEach?.();
   });
+  conf.afterAll?.();
 };
 
 const runner = <
