@@ -211,7 +211,7 @@ export const makeGraphInputSchemaFromInputLiterals = <
 export interface Graph<
   StateId extends string,
   S extends State<StateId>,
-  EdgeName extends Exclude<string, ImplicitEdgeName<any>>,
+  EdgeName extends ExplicitEdgesOnly<string>,
   Resource extends string
 > {
   getExplicitEdges: GetExplicitEdges<S, EdgeName, Resource>;
