@@ -1,5 +1,5 @@
 import { Configure } from "./configuration.js";
-import { AllEdges, State } from "./graph.js";
+import { AllEdgeName, State } from "./graph.js";
 import { Step, runScheduler } from "./scheduler.js";
 import _ from "lodash";
 
@@ -9,10 +9,10 @@ const runSteps = <
   EdgeName extends string,
   Resource extends string
 >(
-  steps: Step<AllEdges<EdgeName, S["id"]>>[],
+  steps: Step<AllEdgeName<EdgeName, S["id"]>>[],
   conf: Configure<S["id"], S, EdgeName, Resource>
 ) => {
-  const edges = conf.graph.getEdges();
+  const edges = conf.graph.getAllEdges();
   conf.beforeAll?.();
   _.forEach(steps, (step) => {
     conf.beforeEach?.();
