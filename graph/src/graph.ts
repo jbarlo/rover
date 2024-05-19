@@ -53,7 +53,7 @@ export interface ActionContext<
   S extends State<string>,
   Resource extends string
 > {
-  edge: BaseEdge<AllEdgeNames<EdgeName, S["id"]>, S, Resource>;
+  edge: BaseEdge<AllEdges<EdgeName, S["id"]>, S, Resource>;
   graph: Graph<S["id"], S, ExplicitEdgesOnly<EdgeName>, Resource>;
 }
 interface BaseEdge<
@@ -105,11 +105,11 @@ export type Edges<
 // - all resources
 type ImplicitEdge<StateId extends string> = `implicit-${StateId}-to-${StateId}`;
 
-export type AllEdgeNames<EdgeName extends string, StateId extends string> =
+export type AllEdges<EdgeName extends string, StateId extends string> =
   | EdgeName
   | ImplicitEdge<StateId>;
 
-type ExplicitEdgesOnly<T extends string> = T extends ImplicitEdge<any>
+export type ExplicitEdgesOnly<T extends string> = T extends ImplicitEdge<any>
   ? never
   : T;
 
@@ -122,7 +122,7 @@ export type AllEdgesResult<
   S extends State<string>,
   EdgeName extends string,
   Resource extends string
-> = GetEdgesResult<S, AllEdgeNames<EdgeName, S["id"]>, Resource>;
+> = GetEdgesResult<S, AllEdges<EdgeName, S["id"]>, Resource>;
 export type OnlyExplicitEdgesResult<
   S extends State<string>,
   EdgeName extends string,

@@ -1,5 +1,5 @@
 import { Configure } from "./configuration.js";
-import { AllEdgeNames, Graph, State } from "./graph.js";
+import { AllEdges, State } from "./graph.js";
 import { Step, runScheduler } from "./scheduler.js";
 import _ from "lodash";
 
@@ -9,7 +9,7 @@ const runSteps = <
   EdgeName extends string,
   Resource extends string
 >(
-  steps: Step<AllEdgeNames<EdgeName, S["id"]>>[],
+  steps: Step<AllEdges<EdgeName, S["id"]>>[],
   conf: Configure<S["id"], S, EdgeName, Resource>
 ) => {
   const edges = conf.graph.getEdges();
@@ -35,7 +35,6 @@ const runner = <
   try {
     console.log("Running Scheduler");
     const steps = runScheduler(conf.graph);
-    // console.log(JSON.stringify(steps, null, 2));
     console.log("Scheduler Complete!");
 
     console.log("Running...");
