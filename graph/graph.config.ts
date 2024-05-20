@@ -1,3 +1,4 @@
+import { chromium } from "playwright";
 import { configure } from "./src/configuration.js";
 
 // TODO possible configs:
@@ -5,10 +6,17 @@ import { configure } from "./src/configuration.js";
 //  - nonnegative resource? all edges with that resource in the condition gets
 //    anded with >=0?
 
+const browser = await chromium.launch();
+const context = await browser.newContext();
+const page = await context.newPage();
+
 export default configure({
-  beforeEach: () => {},
-  afterEach: () => {},
-  beforeAll: ({ steps, graph }) => {
+  beforeEach: async () => {},
+  afterEach: async () => {
+    const screenshotBuffer = await page.screenshot({ fullPage: true });
+    console.log(screenshotBuffer.toString("base64"));
+  },
+  beforeAll: async ({ steps, graph }) => {
     if (steps.length === 0) {
       throw new Error("No steps");
     }
@@ -26,12 +34,15 @@ export default configure({
       throw new Error("Initial state must have a url");
     }
 
-    // TODO goto url
     console.log("start at", initialUrl);
+    await page.goto(initialUrl);
   },
-  afterAll: () => {},
+  afterAll: async () => {
+    await context.close();
+    await browser.close();
+  },
   graph: {
-    implicitEdgeAction: ({ edge, graph }) => {
+    implicitEdgeAction: async ({ edge, graph }) => {
       const navigableStates = graph.getNavigableStates();
       const navigableState = navigableStates.find(
         (state) => state.id === edge.to
@@ -44,26 +55,36 @@ export default configure({
         throw new Error("Navigable state must have a url");
       }
 
-      // TODO goto url
       console.log("go to", url);
+      await page.goto(url);
     },
     states: [
       { id: "search", url: "https://www.google.com" },
       { id: "results" },
+      { id: "results2" },
     ] as const,
     edges: [
       {
         from: "search",
         to: "results",
         name: "search",
-        action: () => {},
+        action: async () => {
+          await page.fill('textarea[aria-label="Search"]', "playwright");
+          await page.press('textarea[aria-label="Search"]', "Enter");
+        },
       },
       {
-        from: "results",
-        to: "search",
-        name: "back home",
-        action: () => {},
+        from: "search",
+        to: "results2",
+        name: "search2",
+        action: async () => {},
       },
+      // {
+      //   from: "results",
+      //   to: "search",
+      //   name: "back home",
+      //   action: () => {},
+      // },
     ],
     // TODO would be nice to generate this from types
     // TODO allow no resources

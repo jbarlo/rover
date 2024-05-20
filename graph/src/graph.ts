@@ -71,7 +71,7 @@ export interface Edge<
   condition?: Resource extends string
     ? Cond<EdgeCondition<Resource>>
     : undefined;
-  action: (context: ActionContext<EdgeName, S, Resource>) => void;
+  action: (context: ActionContext<EdgeName, S, Resource>) => Promise<void>;
 }
 const makeEdgeSchema = <
   StateIdSchema extends SoloOrUnionSchema<any>,
@@ -102,7 +102,7 @@ export interface ImplicitEdge<
   name: ImplicitEdgeName<S["id"]>;
   action: (
     context: ActionContext<ImplicitEdgeName<S["id"]>, S, Resource>
-  ) => void;
+  ) => Promise<void>;
 }
 
 export type AllEdgeName<EdgeName extends string, StateId extends string> =
@@ -253,7 +253,7 @@ export const initGraph: <
           from: otherState.id,
           to: navState.id,
           name: `implicit-${otherState.id}-to-${navState.id}` as const,
-          action: conf.implicitEdgeAction ?? (() => {}),
+          action: conf.implicitEdgeAction ?? (async () => {}),
         };
         return implicitEdge;
       })

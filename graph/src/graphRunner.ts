@@ -3,7 +3,7 @@ import { AllEdgeName, State } from "./graph.js";
 import { Step, runScheduler } from "./scheduler.js";
 import _ from "lodash";
 
-const runSteps = <
+const runSteps = async <
   StateId extends string,
   S extends State<StateId>,
   EdgeName extends string,
@@ -17,17 +17,17 @@ const runSteps = <
     steps,
     graph: conf.graph,
   };
-  conf.beforeAll?.(context);
-  _.forEach(steps, (step) => {
-    conf.beforeEach?.(context);
+  await conf.beforeAll?.(context);
+  for (const step of steps) {
+    await conf.beforeEach?.(context);
     const edge = edges[step.edgeName]!;
-    edge.action({ edge, graph: conf.graph });
-    conf.afterEach?.(context);
-  });
-  conf.afterAll?.(context);
+    await edge.action({ edge, graph: conf.graph });
+    await conf.afterEach?.(context);
+  }
+  await conf.afterAll?.(context);
 };
 
-const runner = <
+const runner = async <
   StateId extends string,
   S extends State<StateId>,
   EdgeName extends string,
@@ -42,7 +42,7 @@ const runner = <
     console.log("Scheduler Complete!");
 
     console.log("Running...");
-    runSteps<StateId, S, EdgeName, Resource>(steps, conf);
+    await runSteps<StateId, S, EdgeName, Resource>(steps, conf);
     console.log("Done");
   } catch (e) {
     console.error(e);

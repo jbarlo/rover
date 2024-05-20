@@ -11,7 +11,7 @@ async function main() {
       )
     ).default
   );
-  runner(config);
+  await runner(config);
 }
 
 main();

@@ -5,10 +5,11 @@ WORKDIR /app
 
 COPY package.json package-lock.json ./
 COPY playwright.config.ts ./
+COPY tsconfig.json ./
 
 RUN npm ci
 
 COPY src ./src
-COPY tests ./tests
+COPY graph.config.ts ./
 
-CMD ["npx", "playwright", "test"]
+CMD ["npm", "start"]
