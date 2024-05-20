@@ -1,4 +1,4 @@
-import { adjacentPairs, interlace } from "./utils.js";
+import { adjacentPairs, interlace, isSubArray } from "./utils.js";
 
 describe("utils", () => {
   describe("adjacentPairs", () => {
@@ -43,6 +43,29 @@ describe("utils", () => {
       expect(
         interlace(["a", "b", "c", "d", "e"], (a, b) => `${a}${b}`)
       ).toEqual(["a", "ab", "b", "bc", "c", "cd", "d", "de", "e"]);
+    });
+  });
+
+  describe("isSubArray", () => {
+    it("should return true when the subarray is empty", () => {
+      expect(isSubArray([1, 2, 3], [])).toEqual(true);
+      expect(isSubArray([], [])).toEqual(true);
+      expect(isSubArray([1, 1, 1, 1, 2], [1, 2])).toEqual(true);
+    });
+    it("should return true when the subarray is a subset of the array", () => {
+      expect(isSubArray([1, 2, 3], [1])).toEqual(true);
+      expect(isSubArray([1, 2, 3], [2, 3])).toEqual(true);
+    });
+    it("should not return true when the subarray is not a subset of the array", () => {
+      expect(isSubArray([1, 2, 3], [2, 4])).toEqual(false);
+      expect(isSubArray([1, 2, 3], [1, 3])).toEqual(false);
+    });
+    it("should not confuse substrings as subarrays", () => {
+      expect(isSubArray(["tester"], ["test"])).toEqual(false);
+    });
+    it("should return false if the subarray is larger than the array", () => {
+      expect(isSubArray([], [1])).toEqual(false);
+      expect(isSubArray([1, 2, 3], [1, 2, 3, 4])).toEqual(false);
     });
   });
 });

@@ -25,3 +25,16 @@ export const interlace = <T>(
     ])
   );
 };
+
+export const isSubArray = <T>(arr: T[], testSubArr: T[]): boolean => {
+  if (testSubArr.length === 0) return true;
+  const firstSubArrItem = testSubArr[0]!;
+  const arrWithIndices = arr.map((item, i) => ({ item, i }));
+  const matchingIndices = arrWithIndices.filter(({ item }) =>
+    _.isEqual(item, firstSubArrItem)
+  );
+  return _.some(matchingIndices, ({ item, i }) => {
+    const subArr = arr.slice(i, i + testSubArr.length);
+    return _.isEqual(subArr, testSubArr);
+  });
+};

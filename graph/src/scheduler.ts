@@ -23,7 +23,7 @@ import {
   preparePack,
   AllEdgeName,
 } from "./graph.js";
-import { adjacentPairs, interlace } from "./utils.js";
+import { adjacentPairs, interlace, isSubArray } from "./utils.js";
 
 // Check if all states are reachable from starting states
 const traversabilityCheck = <
@@ -808,8 +808,7 @@ const getNonRedundantRoutes = <EdgeName extends string>(
     "asc"
   ).map((r) => ({
     edgeName: r.edgeName,
-    // TODO does this risk nonescaped shenanigans?
-    preparationPath: [...r.preparationPath, r.edgeName].join(","),
+    preparationPath: [...r.preparationPath, r.edgeName],
   }));
 
   const nonredundantRoutes: Route<EdgeName>[] = [];
@@ -818,7 +817,7 @@ const getNonRedundantRoutes = <EdgeName extends string>(
       _.every(_.range(i + 1, orderedStringifiedRoutes.length), (j) => {
         const otherRoute = orderedStringifiedRoutes[j];
         if (_.isNil(otherRoute)) return true; // ignore
-        return !otherRoute.preparationPath.includes(route.preparationPath);
+        return !isSubArray(otherRoute.preparationPath, route.preparationPath);
       })
     ) {
       const nonredundantRoute = keyedRoutes[route.edgeName];
