@@ -53,10 +53,10 @@ export interface ActionContext<
   S extends State<string>,
   Resource extends string
 > {
-  edge: BaseEdge<AllEdgeName<EdgeName, S["id"]>, S, Resource>;
+  edge: Edge<AllEdgeName<EdgeName, S["id"]>, S, Resource>;
   graph: Graph<S["id"], S, ExplicitEdgesOnly<EdgeName>, Resource>;
 }
-interface BaseEdge<
+export interface Edge<
   EdgeName extends string,
   S extends State<string>,
   Resource extends string
@@ -98,7 +98,7 @@ export interface ImplicitEdge<
   EdgeName extends string,
   S extends State<string>,
   Resource extends string
-> extends Omit<BaseEdge<EdgeName, S, Resource>, "name" | "action"> {
+> extends Omit<Edge<EdgeName, S, Resource>, "name" | "action"> {
   name: ImplicitEdgeName<S["id"]>;
   action: (
     context: ActionContext<ImplicitEdgeName<S["id"]>, S, Resource>
@@ -114,12 +114,6 @@ export type ExplicitEdgesOnly<EdgeName extends string> = Exclude<
   ImplicitEdgeName<any>
 >;
 
-export type Edges<
-  EdgeName extends string,
-  States extends State<string>[],
-  Resource extends string
-> = BaseEdge<EdgeName, States[number], Resource>[];
-
 // TODO nice things for a not a monad -- all clones of the actual underlying
 // - keyed edges -- with 1-to-1 guarantees
 // - keyed states -- with 1-to-1 guarantees
@@ -130,7 +124,7 @@ export type GetEdgesResult<
   S extends State<string>,
   EdgeName extends string,
   Resource extends string
-> = Record<EdgeName, BaseEdge<EdgeName, S, Resource>>;
+> = Record<EdgeName, Edge<EdgeName, S, Resource>>;
 export type GetAllEdgesResult<
   S extends State<string>,
   EdgeName extends string,
@@ -189,7 +183,7 @@ export interface GraphConfInput<
   Resource extends string
 > {
   states: S[];
-  edges: Edges<EdgeName, S[], Resource>;
+  edges: Edge<EdgeName, S, Resource>[];
   resources: Resource[];
   implicitEdgeAction?: ImplicitEdge<EdgeName, S, Resource>["action"];
 }

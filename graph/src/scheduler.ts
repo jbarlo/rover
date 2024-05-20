@@ -16,12 +16,12 @@ import {
 import {
   GetAllEdgesResult,
   EdgeCondition,
-  Edges,
   Graph,
   State,
   ValueOf,
   preparePack,
   AllEdgeName,
+  Edge,
 } from "./graph.js";
 import { adjacentPairs, interlace, isSubArray } from "./utils.js";
 
@@ -302,8 +302,8 @@ type IsNeighbourWithPrev<
   S extends State<string>,
   R extends string
 > = (
-  prevEdge: Edges<AllEdgeName<EdgeName, S["id"]>, S[], R>[number],
-  currEdge: Edges<AllEdgeName<EdgeName, S["id"]>, S[], R>[number]
+  prevEdge: Edge<AllEdgeName<EdgeName, S["id"]>, S, R>,
+  currEdge: Edge<AllEdgeName<EdgeName, S["id"]>, S, R>
 ) => boolean;
 const traceValidPathThroughHorizons = <
   StateId extends string,
