@@ -291,6 +291,8 @@ export const initGraph: <
 
 export type ValueOf<T> = T[keyof T];
 
+export type Pack<Resource extends string> = Record<Resource, number>;
+
 export const preparePack = <
   StateId extends string,
   S extends State<StateId>,
@@ -298,19 +300,23 @@ export const preparePack = <
   Resource extends string
 >(
   graph: Graph<StateId, S, EdgeName, Resource>,
-  initialPack?: Partial<Record<Resource, number>>
+  initialPack?: Partial<Pack<Resource>>
 ) => {
   const emptyPack = _.mapValues(
     _.keyBy(graph.getResources(), (r) => r),
     () => 0
-  ) as Record<Resource, number>; // TODO typing
-  const pack: Record<Resource, number> = {
+  ) as Pack<Resource>; // TODO typing
+  let pack: Pack<Resource> = {
     ...emptyPack,
     ..._.omitBy(initialPack, (v) => _.isNil(v)),
   };
 
   const updatePack = (resource: Resource, update: (prev: number) => number) => {
-    pack[resource] = update(pack[resource]);
+    const newPack = {
+      ..._.cloneDeep(pack),
+      [resource]: update(pack[resource]),
+    };
+    pack = newPack;
   };
 
   const applyResourceEffects = (

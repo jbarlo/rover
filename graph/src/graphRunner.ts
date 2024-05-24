@@ -1,5 +1,5 @@
 import { Configure, InputConfigureContext } from "./configuration.js";
-import { AllEdgeName, State } from "./graph.js";
+import { AllEdgeName, State, preparePack } from "./graph.js";
 import { Step, runScheduler } from "./scheduler.js";
 import _ from "lodash";
 
@@ -18,11 +18,16 @@ const runSteps = async <
     graph: conf.graph,
   };
   await conf.beforeAll?.(context);
+  const pack = preparePack(conf.graph);
   for (const step of steps) {
-    await conf.beforeEach?.(context);
+    await conf.beforeEach?.({ ...context, step, pack: pack.pack });
     const edge = edges[step.edgeName]!;
     await edge.action({ edge, graph: conf.graph });
-    await conf.afterEach?.(context);
+    pack.applyResourceEffects(
+      edge.resourceEffects,
+      (prev, value) => prev + value
+    );
+    await conf.afterEach?.({ ...context, step, pack: pack.pack });
   }
   await conf.afterAll?.(context);
 };

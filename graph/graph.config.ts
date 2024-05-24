@@ -1,10 +1,13 @@
 import { chromium } from "playwright";
 import { configure } from "./src/configuration.js";
+import sampleCollector from "./src/sampleCollector.js";
 
 // TODO possible configs:
 //  - gte/lte
 //  - nonnegative resource? all edges with that resource in the condition gets
 //    anded with >=0?
+
+const samples = sampleCollector();
 
 const browser = await chromium.launch();
 const context = await browser.newContext();
@@ -12,9 +15,15 @@ const page = await context.newPage();
 
 export default configure({
   beforeEach: async () => {},
-  afterEach: async () => {
-    const screenshotBuffer = await page.screenshot({ fullPage: true });
-    console.log(screenshotBuffer.toString("base64"));
+  afterEach: async ({ step, pack }) => {
+    if (step.type === "action") {
+      const screenshotBuffer = await page.screenshot({ fullPage: true });
+      samples.addSample(
+        { screenshot: screenshotBuffer.toString("base64") },
+        step.edgeName,
+        pack
+      );
+    }
   },
   beforeAll: async ({ steps, graph }) => {
     if (steps.length === 0) {
@@ -40,6 +49,8 @@ export default configure({
   afterAll: async () => {
     await context.close();
     await browser.close();
+
+    samples.storeSamples();
   },
   graph: {
     implicitEdgeAction: async ({ edge, graph }) => {
