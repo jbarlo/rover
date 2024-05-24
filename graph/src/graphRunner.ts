@@ -20,14 +20,14 @@ const runSteps = async <
   await conf.beforeAll?.(context);
   const pack = preparePack(conf.graph);
   for (const step of steps) {
-    await conf.beforeEach?.({ ...context, step, pack: pack.pack });
+    await conf.beforeEach?.({ ...context, step, pack: pack.getPack() });
     const edge = edges[step.edgeName]!;
     await edge.action({ edge, graph: conf.graph });
     pack.applyResourceEffects(
       edge.resourceEffects,
       (prev, value) => prev + value
     );
-    await conf.afterEach?.({ ...context, step, pack: pack.pack });
+    await conf.afterEach?.({ ...context, step, pack: pack.getPack() });
   }
   await conf.afterAll?.(context);
 };

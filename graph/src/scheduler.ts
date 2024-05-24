@@ -363,7 +363,7 @@ const traceValidPathThroughHorizonsWithPack = <
   const edges = graph.getAllEdges();
   const allResources = graph.getResources();
 
-  const { pack: effectPack, applyResourceEffects } = preparePack(graph);
+  const { getPack, applyResourceEffects } = preparePack(graph);
 
   return traceValidPathThroughHorizons(
     graph,
@@ -374,7 +374,7 @@ const traceValidPathThroughHorizonsWithPack = <
       const cond = edge.condition;
       return (
         _.isNil(cond) ||
-        _.every(allResources, (r) => verifyCond(effectPack[r], r, cond))
+        _.every(allResources, (r) => verifyCond(getPack()[r], r, cond))
       );
     },
     (validEdge) => {
@@ -906,14 +906,14 @@ const getPackFromPath = <
 ): Record<R, number> => {
   const edges = graph.getAllEdges();
 
-  const { pack, applyResourceEffects } = preparePack(graph, initialPack);
+  const { getPack, applyResourceEffects } = preparePack(graph, initialPack);
 
   _.forEach(path, (edgeName) => {
     const edge = edges[edgeName];
     applyResourceEffects(edge.resourceEffects, (prev, value) => prev + value);
   });
 
-  return pack;
+  return getPack();
 };
 
 export interface Step<EdgeName extends string> {
@@ -953,7 +953,7 @@ const verifyPathRespectsConditionals = <
   const edges = graph.getAllEdges();
   const allResources = graph.getResources();
 
-  const { pack, applyResourceEffects } = preparePack(graph);
+  const { getPack, applyResourceEffects } = preparePack(graph);
 
   return _.every(path, ({ edgeName }) => {
     const edge = edges[edgeName];
@@ -962,7 +962,7 @@ const verifyPathRespectsConditionals = <
 
     const packIsValidForEdge =
       _.isNil(edgeCondition) ||
-      _.every(allResources, (r) => verifyCond(pack[r], r, edgeCondition));
+      _.every(allResources, (r) => verifyCond(getPack()[r], r, edgeCondition));
 
     applyResourceEffects(resourceEffects, (prev, value) => prev + value);
 
@@ -981,14 +981,14 @@ const verifyPathEndsWithEmptyPack = <
   const edges = graph.getAllEdges();
   const allResources = graph.getResources();
 
-  const { pack, applyResourceEffects } = preparePack(graph);
+  const { getPack, applyResourceEffects } = preparePack(graph);
 
   _.forEach(path, ({ edgeName }) => {
     const edge = edges[edgeName];
     applyResourceEffects(edge.resourceEffects, (prev, value) => prev + value);
   });
 
-  return _.every(allResources, (r) => pack[r] === 0);
+  return _.every(allResources, (r) => getPack()[r] === 0);
 };
 const verifyEveryExplicitEdgeHasOneActionStep = <
   StateId extends string,

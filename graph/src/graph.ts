@@ -306,17 +306,13 @@ export const preparePack = <
     _.keyBy(graph.getResources(), (r) => r),
     () => 0
   ) as Pack<Resource>; // TODO typing
-  let pack: Pack<Resource> = {
+  const pack: Pack<Resource> = {
     ...emptyPack,
     ..._.omitBy(initialPack, (v) => _.isNil(v)),
   };
 
   const updatePack = (resource: Resource, update: (prev: number) => number) => {
-    const newPack = {
-      ..._.cloneDeep(pack),
-      [resource]: update(pack[resource]),
-    };
-    pack = newPack;
+    pack[resource] = update(pack[resource]);
   };
 
   const applyResourceEffects = (
@@ -329,5 +325,5 @@ export const preparePack = <
     });
   };
 
-  return { pack, updatePack, applyResourceEffects };
+  return { getPack: () => _.cloneDeep(pack), updatePack, applyResourceEffects };
 };
