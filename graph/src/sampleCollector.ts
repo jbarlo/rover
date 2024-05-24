@@ -1,7 +1,9 @@
+import { writeFileSync } from "fs";
 import { AllEdgeName, Pack } from "./graph.js";
 
 interface Sample {
-  screenshot: string;
+  screenshot?: string;
+  domString?: string;
 }
 
 interface SampleMetadata<
@@ -35,7 +37,9 @@ const sampleCollector = <
   StateId extends string,
   EdgeName extends string,
   Resource extends string
->(): SampleCollectorResponse<StateId, EdgeName, Resource> => {
+>(
+  savePath: string
+): SampleCollectorResponse<StateId, EdgeName, Resource> => {
   const samples = new Map<
     [AllEdgeName<EdgeName, StateId>, Pack<Resource>],
     SampleMetadata<StateId, EdgeName, Resource>
@@ -49,9 +53,8 @@ const sampleCollector = <
       samples.set([edgeName, pack], { sample, edgeName, pack });
     },
     getSamples: () => samples,
-    // TODO
     storeSamples: () => {
-      console.log([...samples.values()]);
+      writeFileSync(savePath, JSON.stringify([...samples.values()]), "utf8");
     },
   };
 };

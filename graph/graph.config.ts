@@ -7,7 +7,7 @@ import sampleCollector from "./src/sampleCollector.js";
 //  - nonnegative resource? all edges with that resource in the condition gets
 //    anded with >=0?
 
-const samples = sampleCollector();
+const samples = sampleCollector("./samples/samples.json");
 
 const browser = await chromium.launch();
 const context = await browser.newContext();
@@ -18,8 +18,9 @@ export default configure({
   afterEach: async ({ step, pack }) => {
     if (step.type === "action") {
       const screenshotBuffer = await page.screenshot({ fullPage: true });
+      const domString = await page.content();
       samples.addSample(
-        { screenshot: screenshotBuffer.toString("base64") },
+        { screenshot: screenshotBuffer.toString("base64"), domString },
         step.edgeName,
         pack
       );
