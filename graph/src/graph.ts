@@ -1,6 +1,7 @@
 import _ from "lodash";
 import { Cond } from "./cond.js";
 import { ZodLiteral, ZodUnion, z } from "zod";
+import { Page } from "@playwright/test";
 
 type SoloOrUnionSchema<I> =
   | ZodUnion<[ZodLiteral<I>, ZodLiteral<I>, ...ZodLiteral<I>[]]>
@@ -55,6 +56,7 @@ export interface ActionContext<
 > {
   edge: Edge<AllEdgeName<EdgeName, S["id"]>, S, Resource>;
   graph: Graph<S["id"], S, ExplicitEdgesOnly<EdgeName>, Resource>;
+  page: Page;
 }
 export interface Edge<
   EdgeName extends string,
