@@ -40,16 +40,16 @@ export interface InputConfigure<
   graph: GraphConfInput<StateId, S, EdgeName, Resource>;
   beforeEach?: (
     context: InputConfigureEachContext<StateId, S, EdgeName, Resource>
-  ) => Promise<void>;
+  ) => void | Promise<void>;
   afterEach?: (
     context: InputConfigureEachContext<StateId, S, EdgeName, Resource>
-  ) => Promise<void>;
+  ) => void | Promise<void>;
   beforeAll?: (
     context: InputConfigureContext<StateId, S, EdgeName, Resource>
-  ) => Promise<void>;
+  ) => void | Promise<void>;
   afterAll?: (
     context: InputConfigureContext<StateId, S, EdgeName, Resource>
-  ) => Promise<void>;
+  ) => void | Promise<void>;
 }
 
 const makeConfigureSchema = <

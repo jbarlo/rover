@@ -104,7 +104,7 @@ export interface ImplicitEdge<
   name: ImplicitEdgeName<S["id"]>;
   action: (
     context: ActionContext<ImplicitEdgeName<S["id"]>, S, Resource>
-  ) => Promise<void>;
+  ) => void | Promise<void>;
 }
 
 export type AllEdgeName<EdgeName extends string, StateId extends string> =
