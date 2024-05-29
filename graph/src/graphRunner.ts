@@ -1,9 +1,18 @@
-import { chromium } from "@playwright/test";
+import { Page, chromium } from "@playwright/test";
 import { Configure, InputConfigureContext } from "./configuration.js";
 import { AllEdgeName, State, preparePack } from "./graph.js";
-import sampleCollector from "./sampleCollector.js";
+import sampleCollector, { Sample } from "./sampleCollector.js";
 import { Step, runScheduler } from "./scheduler.js";
 import _ from "lodash";
+
+const getSample = async (page: Page): Promise<Sample> => {
+  return {
+    screenshot: (await page.screenshot({ fullPage: true })).toString("base64"),
+    domString: await page.content(),
+  };
+};
+
+const SAMPLE_SAVE_PATH = "./samples/samples.json";
 
 const runSteps = async <
   StateId extends string,
@@ -19,18 +28,20 @@ const runSteps = async <
     steps,
     graph: conf.graph,
   };
-  const samples = sampleCollector("./samples/samples.json");
+  const samples = sampleCollector(SAMPLE_SAVE_PATH);
 
   const browser = await chromium.launch();
   const browserContext = await browser.newContext();
   const page = await browserContext.newPage();
 
   try {
-    await conf.beforeAll?.(context);
     if (steps.length === 0) {
       throw new Error("No steps");
     }
+
+    await conf.beforeAll?.(context);
     const firstStep = steps[0]!;
+    const states = conf.graph.getStates();
     const navigableStates = conf.graph.getNavigableStates();
     const initialState = navigableStates.find(
       (state) => state.id === edges[firstStep.edgeName]!.from
@@ -44,8 +55,10 @@ const runSteps = async <
     }
 
     await page.goto(initialUrl);
-
     const pack = preparePack(conf.graph);
+
+    samples.addSample(await getSample(page), initialState.id, pack.getPack());
+
     for (const step of steps) {
       await conf.beforeEach?.({ ...context, step, pack: pack.getPack() });
 
@@ -58,13 +71,10 @@ const runSteps = async <
 
       const afterPack = pack.getPack();
       if (step.type === "action") {
-        const screenshotBuffer = await page.screenshot({ fullPage: true });
-        const domString = await page.content();
-        samples.addSample(
-          { screenshot: screenshotBuffer.toString("base64"), domString },
-          step.edgeName,
-          afterPack
-        );
+        const state = states.find((state) => state.id === edge.to);
+        if (_.isNil(state)) throw new Error("State not found");
+
+        samples.addSample(await getSample(page), state.id, afterPack);
       }
       await conf.afterEach?.({ ...context, step, pack: afterPack });
     }
