@@ -34,7 +34,7 @@ const sampleCollector = <StateId extends string, Resource extends string>(
   return {
     addSample: (sample, stateId, pack) => {
       if (samples.has([stateId, pack])) {
-        throw new Error("Sample already exists");
+        console.log("Sample already exists", JSON.stringify([stateId, pack]));
       }
       console.log(pack);
       samples.set([stateId, pack], { sample, stateId, pack });
