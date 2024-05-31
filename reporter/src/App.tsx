@@ -1,5 +1,5 @@
 import { ThemeProvider } from "@/components/theme-provider";
-import { Button } from "@/components/ui/button";
+import Importer from "./components/importer";
 
 function App() {
   return (
@@ -8,7 +8,11 @@ function App() {
         Hello world!
       </h1>
       <div>
-        <Button variant="default">tester</Button>
+        <Importer
+          onImport={(files) => {
+            console.log(files);
+          }}
+        />
       </div>
     </ThemeProvider>
   );
