@@ -12,6 +12,8 @@ import {
 function App() {
   const [files, setFiles] = useState<File[]>([]);
 
+  const [selectedFileIndex, setSelectedFileIndex] = useState<number | null>();
+
   return (
     <ThemeProvider defaultTheme="dark" storageKey="reporter-ui-theme">
       <ResizablePanelGroup direction="horizontal">
@@ -28,8 +30,11 @@ function App() {
               id: `${i}-${f.name}`,
               index: i,
               name: f.name,
+              selected: i === selectedFileIndex,
             }))}
-            onClick={() => {}}
+            onClick={(f) => {
+              setSelectedFileIndex(f.index);
+            }}
             onClickRemove={(f) => {
               setFiles((prev) => [
                 ...slice(prev, 0, f.index),
@@ -39,7 +44,9 @@ function App() {
           />
         </ResizablePanel>
         <ResizableHandle />
-        <ResizablePanel className="p-2">TODO</ResizablePanel>
+        <ResizablePanel className="p-2">
+          {files[selectedFileIndex ?? 0]?.name}
+        </ResizablePanel>
       </ResizablePanelGroup>
     </ThemeProvider>
   );

@@ -10,13 +10,17 @@ import { Cross1Icon } from "@radix-ui/react-icons";
 import { map } from "lodash";
 import { Button } from "./ui/button";
 
-export interface FileListProps<FileData extends { id: string; name: string }> {
+export interface FileListProps<
+  FileData extends { id: string; name: string; selected: boolean }
+> {
   files: FileData[];
   onClick?: (file: FileData) => void;
   onClickRemove?: (file: FileData) => void;
 }
 
-const FileList = <FileData extends { id: string; name: string }>({
+const FileList = <
+  FileData extends { id: string; name: string; selected: boolean }
+>({
   files,
   onClick,
   onClickRemove,
@@ -28,7 +32,12 @@ const FileList = <FileData extends { id: string; name: string }>({
       </TableHeader>
       <TableBody>
         {map(files, (file) => (
-          <TableRow key={file.name} onClick={() => onClick?.(file)}>
+          <TableRow
+            key={file.name}
+            onClick={() => onClick?.(file)}
+            className="cursor-pointer"
+            data-state={file.selected ? "selected" : undefined}
+          >
             <TableCell>{file.name}</TableCell>
             <TableCell>
               <Button
