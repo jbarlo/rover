@@ -33,7 +33,7 @@ const FileList = <
       <TableBody>
         {map(files, (file) => (
           <TableRow
-            key={file.name}
+            key={file.id}
             onClick={() => onClick?.(file)}
             className="cursor-pointer"
             data-state={file.selected ? "selected" : undefined}
@@ -42,7 +42,10 @@ const FileList = <
             <TableCell>
               <Button
                 variant="destructive"
-                onClick={() => onClickRemove?.(file)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClickRemove?.(file);
+                }}
               >
                 <Cross1Icon className="mr-2" />
                 Remove

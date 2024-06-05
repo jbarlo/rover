@@ -2,7 +2,7 @@ import { ThemeProvider } from "@/components/themeProvider";
 import Importer from "./components/importer";
 import FileList from "./components/fileList";
 import { useState } from "react";
-import { map, slice } from "lodash";
+import { clamp, map, slice } from "lodash";
 import {
   ResizableHandle,
   ResizablePanel,
@@ -39,6 +39,13 @@ function App() {
               setSelectedFileIndex(f.index);
             }}
             onClickRemove={(f) => {
+              // if the removed file is or before the selected file, shift the
+              // index back by one
+              if (f.index <= selectedFileIndex) {
+                setSelectedFileIndex((prev) =>
+                  clamp(prev - 1, 0, files.length - 1)
+                );
+              }
               setFiles((prev) => [
                 ...slice(prev, 0, f.index),
                 ...slice(prev, f.index + 1),
