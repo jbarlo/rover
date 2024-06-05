@@ -8,11 +8,14 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "./components/ui/resizable";
+import ReportViewer from "./components/ReportViewer";
 
 function App() {
   const [files, setFiles] = useState<File[]>([]);
 
-  const [selectedFileIndex, setSelectedFileIndex] = useState<number | null>();
+  const [selectedFileIndex, setSelectedFileIndex] = useState<number>(0);
+
+  const selectedFile = files[selectedFileIndex];
 
   return (
     <ThemeProvider defaultTheme="dark" storageKey="reporter-ui-theme">
@@ -45,7 +48,7 @@ function App() {
         </ResizablePanel>
         <ResizableHandle />
         <ResizablePanel className="p-2">
-          {files[selectedFileIndex ?? 0]?.name}
+          {selectedFile && <ReportViewer file={selectedFile} />}
         </ResizablePanel>
       </ResizablePanelGroup>
     </ThemeProvider>
