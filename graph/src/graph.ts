@@ -1,4 +1,4 @@
-import _ from "lodash";
+import _, { difference } from "lodash";
 import { Cond } from "./cond.js";
 import { ZodLiteral, ZodUnion, z } from "zod";
 import { Page } from "@playwright/test";
@@ -293,7 +293,17 @@ export const initGraph: <
 
 export type ValueOf<T> = T[keyof T];
 
-export type Pack<Resource extends string> = Record<Resource, number>;
+export const zodStringGeneric = <T extends string>() =>
+  z.custom<T>((data) => typeof data === "string");
+
+export const makePackSchema = <Resource extends string>() =>
+  z.record(zodStringGeneric<Resource>(), z.number());
+
+export type Pack<Resource extends string> = z.infer<
+  ReturnType<typeof makePackSchema<Resource>>
+>;
+
+export type CompletePack<Resource extends string> = Record<Resource, number>;
 
 export const preparePack = <
   StateId extends string,
@@ -302,13 +312,13 @@ export const preparePack = <
   Resource extends string
 >(
   graph: Graph<StateId, S, EdgeName, Resource>,
-  initialPack?: Partial<Pack<Resource>>
+  initialPack?: Partial<CompletePack<Resource>>
 ) => {
   const emptyPack = _.mapValues(
     _.keyBy(graph.getResources(), (r) => r),
     () => 0
-  ) as Pack<Resource>; // TODO typing
-  const pack: Pack<Resource> = {
+  ) as CompletePack<Resource>; // TODO typing
+  const pack: CompletePack<Resource> = {
     ...emptyPack,
     ..._.omitBy(initialPack, (v) => _.isNil(v)),
   };

@@ -4,7 +4,7 @@ import {
   ExplicitEdgesOnly,
   Graph,
   GraphConfInput,
-  Pack,
+  CompletePack,
   State,
   initGraph,
   makeGraphInputSchemaFromInputLiterals,
@@ -28,7 +28,7 @@ export interface InputConfigureEachContext<
   Resource extends string
 > extends InputConfigureContext<StateId, S, EdgeName, Resource> {
   step: Step<AllEdgeName<EdgeName, S["id"]>>;
-  pack: Pack<Resource>;
+  pack: CompletePack<Resource>;
 }
 
 export interface InputConfigure<

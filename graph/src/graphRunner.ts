@@ -28,7 +28,7 @@ const runSteps = async <
     steps,
     graph: conf.graph,
   };
-  const samples = sampleCollector(SAMPLE_SAVE_PATH);
+  const samples = sampleCollector<StateId, Resource>(SAMPLE_SAVE_PATH);
 
   const browser = await chromium.launch();
   const browserContext = await browser.newContext();

@@ -1,24 +1,53 @@
 import { writeFileSync } from "fs";
-import { Pack } from "./graph.js";
+import { CompletePack, makePackSchema, zodStringGeneric } from "./graph.js";
+import { z } from "zod";
 
-export interface Sample {
-  screenshot?: string;
-  domString?: string;
-}
+const sampleSchema = z.object({
+  screenshot: z.string().optional(),
+  domString: z.string().optional(),
+});
 
-interface SampleMetadata<StateId extends string, Resource extends string> {
-  sample: Sample;
-  stateId: StateId;
-  pack: Pack<Resource>;
-}
+export type Sample = z.infer<typeof sampleSchema>;
+
+const makeSampleMetadataSchema = <
+  StateId extends string,
+  Resource extends string
+>() =>
+  z.object({
+    sample: sampleSchema,
+    stateId: zodStringGeneric<StateId>(),
+    pack: makePackSchema<Resource>(),
+  });
+
+type SampleMetadata<StateId extends string, Resource extends string> = z.infer<
+  ReturnType<typeof makeSampleMetadataSchema<StateId, Resource>>
+>;
+
+export const makeReportSchema = <
+  StateId extends string,
+  Resource extends string
+>() =>
+  z.object({
+    version: z.literal("0.1"),
+    samples: z.array(makeSampleMetadataSchema<StateId, Resource>()),
+    // TODO add graph
+  });
+
+export type Report<StateId extends string, Resource extends string> = z.infer<
+  ReturnType<typeof makeReportSchema<StateId, Resource>>
+>;
 
 interface SampleCollectorResponse<
   StateId extends string,
   Resource extends string
 > {
-  addSample: (sample: Sample, stateId: StateId, pack: Pack<Resource>) => void;
+  addSample: (
+    sample: Sample,
+    stateId: StateId,
+    pack: CompletePack<Resource>
+  ) => void;
   getSamples: () => Map<
-    [StateId, Pack<Resource>],
+    [StateId, CompletePack<Resource>],
     SampleMetadata<StateId, Resource>
   >;
   storeSamples: () => void;
@@ -28,7 +57,7 @@ const sampleCollector = <StateId extends string, Resource extends string>(
   savePath: string
 ): SampleCollectorResponse<StateId, Resource> => {
   const samples = new Map<
-    [StateId, Pack<Resource>],
+    [StateId, CompletePack<Resource>],
     SampleMetadata<StateId, Resource>
   >();
   return {
@@ -41,7 +70,11 @@ const sampleCollector = <StateId extends string, Resource extends string>(
     },
     getSamples: () => samples,
     storeSamples: () => {
-      writeFileSync(savePath, JSON.stringify([...samples.values()]), "utf8");
+      const report: Report<StateId, Resource> = {
+        version: "0.1",
+        samples: [...samples.values()],
+      };
+      writeFileSync(savePath, JSON.stringify(report), "utf8");
     },
   };
 };
