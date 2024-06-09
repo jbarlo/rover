@@ -1,9 +1,10 @@
 import { Page, chromium } from "@playwright/test";
 import { Configure, InputConfigureContext } from "./configuration.js";
 import { AllEdgeName, State, preparePack } from "./graph.js";
-import sampleCollector, { Sample } from "./sampleCollector.js";
+import sampleCollector from "./sampleCollector.js";
 import { Step, runScheduler } from "./scheduler.js";
 import _ from "lodash";
+import { Sample } from "./schemas/sampleCollector.js";
 
 const getSample = async (page: Page): Promise<Sample> => {
   return {
