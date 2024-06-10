@@ -55,7 +55,9 @@ function App() {
         </ResizablePanel>
         <ResizableHandle />
         <ResizablePanel className="p-2">
-          {selectedFile && <ReportViewer file={selectedFile} />}
+          <div className="overflow-auto h-full">
+            {selectedFile && <ReportViewer file={selectedFile} />}
+          </div>
         </ResizablePanel>
       </ResizablePanelGroup>
     </ThemeProvider>

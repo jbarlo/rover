@@ -3,6 +3,8 @@
 import { FC, Suspense, use } from "react";
 import { ErrorBoundary } from "react-error-boundary";
 import { makeReportSchema } from "../../../graph/src/schemas/sampleCollector";
+import { isNil, map } from "lodash";
+
 export interface ReportViewerProps {
   file: File;
 }
@@ -16,7 +18,28 @@ const ReportViewer: FC<ReportViewerProps> = ({ file }: ReportViewerProps) => {
     return <div>{data.error.message}</div>;
   }
 
-  return <div>{file.name}</div>;
+  return (
+    <div>
+      <div>{file.name}</div>
+      <div>
+        {map(data.data.samples, (sample) => {
+          const image = isNil(sample.sample.screenshot) ? null : (
+            <img src={`data:image/png;base64, ${sample.sample.screenshot}`} />
+          );
+          return (
+            <div>
+              <div>
+                <span>{`State ID: ${sample.stateId} -- Pack: ${JSON.stringify(
+                  sample.pack
+                )}`}</span>
+              </div>
+              <div className="pt-2 pb-2">{image}</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 };
 
 const fallbackRender = ({ error }: { error: { message: string } }) => {
@@ -34,7 +57,7 @@ const SuspendedReportViewer: FC<ReportViewerProps> = (
   return (
     <ErrorBoundary fallbackRender={fallbackRender}>
       <Suspense fallback={"loading"}>
-        <ReportViewer {...props} />;
+        <ReportViewer {...props} />
       </Suspense>
     </ErrorBoundary>
   );

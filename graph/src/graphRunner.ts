@@ -13,7 +13,7 @@ const getSample = async (page: Page): Promise<Sample> => {
   };
 };
 
-const SAMPLE_SAVE_PATH = "./samples/samples.json";
+const SAMPLE_SAVE_PATH = "./samples/samples.samples.json";
 
 const runSteps = async <
   StateId extends string,

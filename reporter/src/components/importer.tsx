@@ -19,6 +19,7 @@ const Importer: FC<ImporterProps> = ({ onImport }: ImporterProps) => {
           multiple
           className="cursor-pointer"
           ref={inputRef}
+          accept=".samples.json"
           onChange={(e) => {
             setFiles(e.target.files);
           }}
