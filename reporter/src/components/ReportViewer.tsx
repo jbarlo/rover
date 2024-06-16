@@ -2,14 +2,13 @@
 
 import { FC, Suspense, use } from "react";
 import { ErrorBoundary } from "react-error-boundary";
-import { makeReportSchema } from "../../../graph/src/schemas/sampleCollector";
 import { isNil, map } from "lodash";
+import { reportSchema } from "../../../graph/src/schemas/sampleCollector";
 
 export interface ReportViewerProps {
   file: File;
 }
 
-const reportSchema = makeReportSchema();
 const ReportViewer: FC<ReportViewerProps> = ({ file }: ReportViewerProps) => {
   const fileText = use(file.text());
   const jsonParsedText = JSON.parse(fileText);

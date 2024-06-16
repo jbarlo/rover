@@ -9,10 +9,7 @@ interface SampleCollectorResponse<
   Resource extends string
 > {
   addSample: (sample: Sample, stateId: StateId, pack: Pack<Resource>) => void;
-  getSamples: () => Map<
-    [StateId, Pack<Resource>],
-    SampleMetadata<StateId, Resource>
-  >;
+  getSamples: () => Map<[StateId, Pack<Resource>], SampleMetadata>;
   storeSamples: (steps: Step<AllEdgeName<EdgeName, StateId>>[]) => void;
 }
 
@@ -23,10 +20,7 @@ const sampleCollector = <
 >(
   savePath: string
 ): SampleCollectorResponse<StateId, EdgeName, Resource> => {
-  const samples = new Map<
-    [StateId, Pack<Resource>],
-    SampleMetadata<StateId, Resource>
-  >();
+  const samples = new Map<[StateId, Pack<Resource>], SampleMetadata>();
   return {
     addSample: (sample, stateId, pack) => {
       if (samples.has([stateId, pack])) {
@@ -37,7 +31,7 @@ const sampleCollector = <
     },
     getSamples: () => samples,
     storeSamples: (steps: Step<AllEdgeName<EdgeName, StateId>>[]) => {
-      const report: Report<StateId, Resource> = {
+      const report: Report = {
         version: "0.1",
         samples: [...samples.values()],
         steps,

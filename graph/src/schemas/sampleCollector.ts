@@ -21,32 +21,19 @@ const sampleSchema = z.object({
 
 export type Sample = z.infer<typeof sampleSchema>;
 
-const makeSampleMetadataSchema = <
-  StateId extends string,
-  Resource extends string
->() =>
-  z.object({
-    sample: sampleSchema,
-    stateId: z.string(),
-    pack: packSchema,
-  });
+const metadataSchema = z.object({
+  sample: sampleSchema,
+  stateId: z.string(),
+  pack: packSchema,
+});
 
-export type SampleMetadata<
-  StateId extends string,
-  Resource extends string
-> = z.infer<ReturnType<typeof makeSampleMetadataSchema<StateId, Resource>>>;
+export type SampleMetadata = z.infer<typeof metadataSchema>;
 
-export const makeReportSchema = <
-  const StateId extends string,
-  const Resource extends string
->() =>
-  z.object({
-    version: z.literal("0.1"),
-    samples: z.array(makeSampleMetadataSchema<StateId, Resource>()),
-    steps: z.array(stepSchema),
-    // TODO add graph
-  });
+export const reportSchema = z.object({
+  version: z.literal("0.1"),
+  samples: z.array(metadataSchema),
+  steps: z.array(stepSchema),
+  // TODO add graph
+});
 
-export type Report<StateId extends string, Resource extends string> = z.infer<
-  ReturnType<typeof makeReportSchema<StateId, Resource>>
->;
+export type Report = z.infer<typeof reportSchema>;
