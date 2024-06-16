@@ -116,12 +116,13 @@ const bfs = <T>(
 };
 
 type ConditionalPropagationBfsHorizonEdge<
-  S extends State<string>,
+  StateId extends string,
+  S extends State<StateId>,
   EdgeName extends string,
   R extends string
 > = {
   edge: Pick<
-    ValueOf<GetAllEdgesResult<S, EdgeName, R>>,
+    ValueOf<GetAllEdgesResult<StateId, S, EdgeName, R>>,
     "name" | "resourceEffects" | "to" | "from"
   >;
   condition: HorizonEdgeCondition<R>;
@@ -134,21 +135,31 @@ const conditionalPropagationBfs = <
 >(
   graph: Graph<StateId, S, EdgeName, R>,
   iterLimit: number,
-  initialHorizon: ConditionalPropagationBfsHorizonEdge<S, EdgeName, R>[],
+  initialHorizon: ConditionalPropagationBfsHorizonEdge<
+    StateId,
+    S,
+    EdgeName,
+    R
+  >[],
   getEdgeNeighbours: (
-    edge: ValueOf<GetAllEdgesResult<S, EdgeName, R>>
+    edge: ValueOf<GetAllEdgesResult<StateId, S, EdgeName, R>>
   ) => Pick<
-    ValueOf<GetAllEdgesResult<S, EdgeName, R>>,
+    ValueOf<GetAllEdgesResult<StateId, S, EdgeName, R>>,
     "name" | "resourceEffects" | "to" | "from"
   >[],
   resourceEffectEvaluator: (packValue: number, effectValue: number) => number,
   propagatedNextHorizonValidityPredicate: (
-    horizonElement: ConditionalPropagationBfsHorizonEdge<S, EdgeName, R>
+    horizonElement: ConditionalPropagationBfsHorizonEdge<
+      StateId,
+      S,
+      EdgeName,
+      R
+    >
   ) => boolean,
   // if any horizon element passes, succeed. passing results become the final
   // horizon
   successPredicate: (
-    edge: ConditionalPropagationBfsHorizonEdge<S, EdgeName, R>
+    edge: ConditionalPropagationBfsHorizonEdge<StateId, S, EdgeName, R>
   ) => boolean,
   // TODO consider grouping with propagatedNextHorizonValidityPredicate (labeled
   // "before" and "after"?).
@@ -165,7 +176,7 @@ const conditionalPropagationBfs = <
 
   // TODO make prettyPrint condition order deterministic
   const serializeHorizonEdge = (
-    edge: ConditionalPropagationBfsHorizonEdge<S, EdgeName, R>
+    edge: ConditionalPropagationBfsHorizonEdge<StateId, S, EdgeName, R>
   ): string =>
     `${edge.edge.name}:${
       _.isNil(edge.condition) ? undefined : prettyPrint(edge.condition)
@@ -182,7 +193,7 @@ const conditionalPropagationBfs = <
   //  - if any edge B directionally neighbours edge A, edge B's condition
   //    becomes its existing condition AND edge A's condition
 
-  return bfs<ConditionalPropagationBfsHorizonEdge<S, EdgeName, R>>(
+  return bfs<ConditionalPropagationBfsHorizonEdge<StateId, S, EdgeName, R>>(
     iterLimit,
     initialHorizon,
     (prev) => {
@@ -299,32 +310,33 @@ const conditionalPropagationBfs = <
 
 type IsNeighbourWithPrev<
   EdgeName extends string,
-  S extends State<string>,
+  StateId extends string,
+  S extends State<StateId>,
   R extends string
 > = (
-  prevEdge: Edge<AllEdgeName<EdgeName, S["id"]>, S, R>,
-  currEdge: Edge<AllEdgeName<EdgeName, S["id"]>, S, R>
+  prevEdge: Edge<AllEdgeName<EdgeName, StateId>, StateId, S, R>,
+  currEdge: Edge<AllEdgeName<EdgeName, StateId>, StateId, S, R>
 ) => boolean;
 const traceValidPathThroughHorizons = <
   StateId extends string,
   S extends State<StateId>,
   EdgeName extends string,
   R extends string,
-  H extends { name: AllEdgeName<EdgeName, S["id"]> }
+  H extends { name: AllEdgeName<EdgeName, StateId> }
 >(
   graph: Graph<StateId, S, EdgeName, R>,
   horizons: H[][],
-  isNeighbourWithPrev: IsNeighbourWithPrev<EdgeName, S, R>,
+  isNeighbourWithPrev: IsNeighbourWithPrev<EdgeName, StateId, S, R>,
   // TODO consider just filtering before passing
   firstHorizonFilter: (horizon: H) => boolean = () => true,
   validationFilter: (horizon: H) => boolean = () => true,
   onValidEdgeFound?: (validEdge: H) => void
-): AllEdgeName<EdgeName, S["id"]>[] => {
+): AllEdgeName<EdgeName, StateId>[] => {
   const edges = graph.getAllEdges();
 
   const reversedHorizons = _.reverse(_.cloneDeep(horizons));
 
-  let previousEdgeName: AllEdgeName<EdgeName, S["id"]> | null = null;
+  let previousEdgeName: AllEdgeName<EdgeName, StateId> | null = null;
   return _.map(reversedHorizons, (horizon) => {
     const validEdges = horizon.filter(
       (horizon) =>
@@ -347,19 +359,19 @@ const traceValidPathThroughHorizons = <
 
 // TODO consider and confirm merging this with traceValidPathThroughHorizons
 const traceValidPathThroughHorizonsWithPack = <
-  StateId extends string,
+  const StateId extends string,
   S extends State<StateId>,
-  EdgeName extends string,
-  R extends string
+  const EdgeName extends string,
+  const R extends string
 >(
   graph: Graph<StateId, S, EdgeName, R>,
-  horizons: Horizon<AllEdgeName<EdgeName, S["id"]>, R>[],
-  isNeighbourWithPrev: IsNeighbourWithPrev<EdgeName, S, R>,
+  horizons: Horizon<AllEdgeName<EdgeName, StateId>, R>[],
+  isNeighbourWithPrev: IsNeighbourWithPrev<EdgeName, StateId, S, R>,
   firstHorizonFilter: (
-    horizonEdge: Horizon<AllEdgeName<EdgeName, S["id"]>, R>[number]
+    horizonEdge: Horizon<AllEdgeName<EdgeName, StateId>, R>[number]
   ) => boolean,
   updatePackTo: (packValue: number, effectValue: number) => number
-): AllEdgeName<EdgeName, S["id"]>[] => {
+): AllEdgeName<EdgeName, StateId>[] => {
   const edges = graph.getAllEdges();
   const allResources = graph.getResources();
 
@@ -397,16 +409,16 @@ type Horizon<EdgeName extends string, R extends string> = {
   condition: HorizonEdgeCondition<R>;
 }[];
 export const getConditionalPaths = <
-  StateId extends string,
+  const StateId extends string,
   S extends State<StateId>,
-  EdgeName extends string,
-  Resource extends string
+  const EdgeName extends string,
+  const Resource extends string
 >(
   graph: Graph<StateId, S, EdgeName, Resource>
 ):
   | {
       edgeName: EdgeName;
-      path: AllEdgeName<EdgeName, S["id"]>[];
+      path: AllEdgeName<EdgeName, StateId>[];
     }[]
   | false => {
   const allEdges = graph.getAllEdges();
@@ -427,11 +439,12 @@ export const getConditionalPaths = <
       (typeof conditionalEdges)[number],
       {
         edgeName: EdgeName;
-        path: AllEdgeName<EdgeName, S["id"]>[];
+        path: AllEdgeName<EdgeName, StateId>[];
       }
     >(conditionalEdges, (conditionalEdge, i) => {
       // initialize horizon with conditional edge
       const initialBackpropHorizon: ConditionalPropagationBfsHorizonEdge<
+        StateId,
         S,
         EdgeName,
         Resource
@@ -496,21 +509,21 @@ export const getConditionalPaths = <
 };
 
 export const getNonConditionalPaths = <
-  StateId extends string,
+  const StateId extends string,
   S extends State<StateId>,
-  ExplicitEdgeName extends string,
-  Resource extends string
+  const ExplicitEdgeName extends string,
+  const Resource extends string
 >(
   graph: Graph<StateId, S, ExplicitEdgeName, Resource>,
   conditionalEdgePaths: {
     edgeName: ExplicitEdgeName;
-    path: AllEdgeName<ExplicitEdgeName, S["id"]>[];
+    path: AllEdgeName<ExplicitEdgeName, StateId>[];
   }[]
 ): {
   edgeName: ExplicitEdgeName;
-  path: AllEdgeName<ExplicitEdgeName, S["id"]>[];
+  path: AllEdgeName<ExplicitEdgeName, StateId>[];
 }[] => {
-  type AllEdgeNames = AllEdgeName<ExplicitEdgeName, S["id"]>;
+  type AllEdgeNames = AllEdgeName<ExplicitEdgeName, StateId>;
 
   const edges = graph.getAllEdges();
 
@@ -720,21 +733,21 @@ const packToCondition = <R extends string>(
 });
 
 const getCleanupPath = <
-  StateId extends string,
+  const StateId extends string,
   S extends State<StateId>,
-  EdgeName extends string,
-  R extends string
+  const EdgeName extends string,
+  const R extends string
 >(
   graph: Graph<StateId, S, EdgeName, R>,
   edgeToClean: EdgeName,
   pack: Record<R, number>
   // false or cleanup path
-): false | AllEdgeName<EdgeName, S["id"]>[] => {
+): false | AllEdgeName<EdgeName, StateId>[] => {
   const edges = graph.getAllEdges();
   const allResources = graph.getResources();
 
   const initialEdge:
-    | ConditionalPropagationBfsHorizonEdge<S, EdgeName, R>["edge"] =
+    | ConditionalPropagationBfsHorizonEdge<StateId, S, EdgeName, R>["edge"] =
     edges[edgeToClean];
 
   const initialCond = packToCondition(pack);
@@ -745,6 +758,7 @@ const getCleanupPath = <
   if (condIsSuccessful(initialCond)) return []; // done early!
 
   const initialBackpropHorizon: ConditionalPropagationBfsHorizonEdge<
+    StateId,
     S,
     EdgeName,
     R
@@ -830,13 +844,13 @@ const getNonRedundantRoutes = <EdgeName extends string>(
 };
 
 const constructTotalPath = <
-  StateId extends string,
+  const StateId extends string,
   S extends State<StateId>,
-  EdgeName extends string,
-  Resource extends string
+  const EdgeName extends string,
+  const Resource extends string
 >(
   graph: Graph<StateId, S, EdgeName, Resource>,
-  routes: Route<AllEdgeName<EdgeName, S["id"]>>[]
+  routes: Route<AllEdgeName<EdgeName, StateId>>[]
 ) => {
   const nonRedundantRoutes = getNonRedundantRoutes(routes);
 
@@ -845,7 +859,7 @@ const constructTotalPath = <
   //   action. the actual route has been labeled redundant
   const nonimplicitEdges = graph.getExplicitEdges();
   const edgeTraversed = _.mapValues(nonimplicitEdges, () => false) as Record<
-    AllEdgeName<EdgeName, S["id"]>,
+    AllEdgeName<EdgeName, StateId>,
     boolean
   >; // TODO typing
 
@@ -889,18 +903,18 @@ const constructTotalPath = <
         (e) => e.from === beforeEdge.to && e.to === afterEdge.from
       );
       if (_.isNil(implicitEdge)) throw new Error("Implicit edge not found");
-      return [{ type: "cleanup" as const, edgeName: implicitEdge?.name }];
+      return [{ type: "cleanup" as const, edgeName: implicitEdge.name }];
     })
   );
 };
 
 const getPackFromPath = <
-  StateId extends string,
+  const StateId extends string,
   S extends State<StateId>,
-  EdgeName extends string,
-  R extends string
+  const EdgeName extends string,
+  const R extends string
 >(
-  path: AllEdgeName<EdgeName, S["id"]>[],
+  path: AllEdgeName<EdgeName, StateId>[],
   graph: Graph<StateId, S, EdgeName, R>,
   initialPack?: Partial<Record<R, number>>
 ): Record<R, number> => {
@@ -922,13 +936,13 @@ export interface Step<EdgeName extends string> {
 }
 
 const verifyPathIsContiguous = <
-  StateId extends string,
+  const StateId extends string,
   S extends State<StateId>,
-  EdgeName extends string,
-  Resource extends string
+  const EdgeName extends string,
+  const Resource extends string
 >(
   graph: Graph<StateId, S, EdgeName, Resource>,
-  path: Step<AllEdgeName<EdgeName, S["id"]>>[]
+  path: Step<AllEdgeName<EdgeName, StateId>>[]
 ) => {
   const edges = graph.getAllEdges();
 
@@ -942,13 +956,13 @@ const verifyPathIsContiguous = <
   );
 };
 const verifyPathRespectsConditionals = <
-  StateId extends string,
+  const StateId extends string,
   S extends State<StateId>,
-  EdgeName extends string,
-  Resource extends string
+  const EdgeName extends string,
+  const Resource extends string
 >(
   graph: Graph<StateId, S, EdgeName, Resource>,
-  path: Step<AllEdgeName<EdgeName, S["id"]>>[]
+  path: Step<AllEdgeName<EdgeName, StateId>>[]
 ) => {
   const edges = graph.getAllEdges();
   const allResources = graph.getResources();
@@ -970,13 +984,13 @@ const verifyPathRespectsConditionals = <
   });
 };
 const verifyPathEndsWithEmptyPack = <
-  StateId extends string,
+  const StateId extends string,
   S extends State<StateId>,
-  EdgeName extends string,
-  Resource extends string
+  const EdgeName extends string,
+  const Resource extends string
 >(
   graph: Graph<StateId, S, EdgeName, Resource>,
-  path: Step<AllEdgeName<EdgeName, S["id"]>>[]
+  path: Step<AllEdgeName<EdgeName, StateId>>[]
 ) => {
   const edges = graph.getAllEdges();
   const allResources = graph.getResources();
@@ -991,26 +1005,26 @@ const verifyPathEndsWithEmptyPack = <
   return _.every(allResources, (r) => getPack()[r] === 0);
 };
 const verifyEveryExplicitEdgeHasOneActionStep = <
-  StateId extends string,
+  const StateId extends string,
   S extends State<StateId>,
-  EdgeName extends string,
-  Resource extends string
+  const EdgeName extends string,
+  const Resource extends string
 >(
   graph: Graph<StateId, S, EdgeName, Resource>,
-  path: Step<AllEdgeName<EdgeName, S["id"]>>[]
+  path: Step<AllEdgeName<EdgeName, StateId>>[]
 ) => {
   const edges = graph.getExplicitEdges();
   const filteredPath = _.filter(path, ({ type }) => type === "action");
   return _.size(edges) === filteredPath.length;
 };
 export const pathIsValid = <
-  StateId extends string,
+  const StateId extends string,
   S extends State<StateId>,
-  EdgeName extends string,
-  Resource extends string
+  const EdgeName extends string,
+  const Resource extends string
 >(
   graph: Graph<StateId, S, EdgeName, Resource>,
-  path: Step<AllEdgeName<EdgeName, S["id"]>>[]
+  path: Step<AllEdgeName<EdgeName, StateId>>[]
 ) => {
   if (!verifyPathIsContiguous(graph, path)) return false;
   if (!verifyPathRespectsConditionals(graph, path)) return false;
@@ -1029,13 +1043,13 @@ export const pathIsValid = <
 //   it cleaning up a bunch of resources just to recreate them again
 // - tracking more valid paths might help determine more optimal total paths
 export const runScheduler = <
-  StateId extends string,
+  const StateId extends string,
   S extends State<StateId>,
-  EdgeName extends string,
-  Resource extends string
+  const EdgeName extends string,
+  const Resource extends string
 >(
   graph: Graph<StateId, S, EdgeName, Resource>
-): Step<AllEdgeName<EdgeName, S["id"]>>[] => {
+): Step<AllEdgeName<EdgeName, StateId>>[] => {
   console.log("Validating graph traversability");
   if (traversabilityCheck(graph) === false) {
     throw new Error("Some states are unreachable");
@@ -1053,7 +1067,7 @@ export const runScheduler = <
   const nonConditionalPaths = getNonConditionalPaths(graph, conditionalPaths);
 
   console.log("Constructing routes");
-  const routes: Route<AllEdgeName<EdgeName, S["id"]>>[] = _.map(
+  const routes: Route<AllEdgeName<EdgeName, StateId>>[] = _.map(
     [...conditionalPaths, ...nonConditionalPaths],
     (path) => {
       const cleanupPath = getCleanupPath(

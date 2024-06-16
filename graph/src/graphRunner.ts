@@ -16,20 +16,22 @@ const getSample = async (page: Page): Promise<Sample> => {
 const SAMPLE_SAVE_PATH = "./samples/samples.samples.json";
 
 const runSteps = async <
-  StateId extends string,
+  const StateId extends string,
   S extends State<StateId>,
-  EdgeName extends string,
-  Resource extends string
+  const EdgeName extends string,
+  const Resource extends string
 >(
-  steps: Step<AllEdgeName<EdgeName, S["id"]>>[],
-  conf: Configure<S["id"], S, EdgeName, Resource>
+  steps: Step<AllEdgeName<EdgeName, StateId>>[],
+  conf: Configure<StateId, S, EdgeName, Resource>
 ) => {
   const edges = conf.graph.getAllEdges();
   const context: InputConfigureContext<StateId, S, EdgeName, Resource> = {
     steps,
     graph: conf.graph,
   };
-  const samples = sampleCollector<StateId, Resource>(SAMPLE_SAVE_PATH);
+  const samples = sampleCollector<StateId, EdgeName, Resource>(
+    SAMPLE_SAVE_PATH
+  );
 
   const browser = await chromium.launch();
   const browserContext = await browser.newContext();
@@ -80,7 +82,7 @@ const runSteps = async <
       await conf.afterEach?.({ ...context, step, pack: afterPack });
     }
     await conf.afterAll?.(context);
-    samples.storeSamples();
+    samples.storeSamples(steps);
   } catch (e) {
     console.error("Error running steps");
     console.error(e);

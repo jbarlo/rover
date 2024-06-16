@@ -31,7 +31,7 @@ export default configure({
       { id: "search", url: "https://www.google.com" },
       { id: "results" },
       { id: "results2" },
-    ] as const,
+    ],
     edges: [
       {
         from: "search",

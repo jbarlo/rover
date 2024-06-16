@@ -51,20 +51,22 @@ export type ResourceEffects<R extends string> = Partial<Record<R, number>>;
 
 export interface ActionContext<
   EdgeName extends string,
-  S extends State<string>,
+  StateId extends string,
+  S extends State<StateId>,
   Resource extends string
 > {
-  edge: Edge<AllEdgeName<EdgeName, S["id"]>, S, Resource>;
-  graph: Graph<S["id"], S, ExplicitEdgesOnly<EdgeName>, Resource>;
+  edge: Edge<AllEdgeName<EdgeName, StateId>, StateId, S, Resource>;
+  graph: Graph<StateId, S, ExplicitEdgesOnly<EdgeName>, Resource>;
   page: Page;
 }
 export interface Edge<
   EdgeName extends string,
-  S extends State<string>,
+  StateId extends string,
+  S extends State<StateId>,
   Resource extends string
 > {
-  from: S["id"];
-  to: S["id"];
+  from: StateId;
+  to: StateId;
   name: EdgeName;
   // the changes made to resources through the action
   resourceEffects?: Resource extends string
@@ -73,7 +75,9 @@ export interface Edge<
   condition?: Resource extends string
     ? Cond<EdgeCondition<Resource>>
     : undefined;
-  action: (context: ActionContext<EdgeName, S, Resource>) => Promise<void>;
+  action: (
+    context: ActionContext<EdgeName, StateId, S, Resource>
+  ) => Promise<void>;
 }
 const makeEdgeSchema = <
   StateIdSchema extends SoloOrUnionSchema<any>,
@@ -98,12 +102,13 @@ export type ImplicitEdgeName<StateId extends string> =
   `implicit-${StateId}-to-${StateId}`;
 export interface ImplicitEdge<
   EdgeName extends string,
-  S extends State<string>,
+  StateId extends string,
+  S extends State<StateId>,
   Resource extends string
-> extends Omit<Edge<EdgeName, S, Resource>, "name" | "action"> {
-  name: ImplicitEdgeName<S["id"]>;
+> extends Omit<Edge<EdgeName, StateId, S, Resource>, "name" | "action"> {
+  name: ImplicitEdgeName<StateId>;
   action: (
-    context: ActionContext<ImplicitEdgeName<S["id"]>, S, Resource>
+    context: ActionContext<ImplicitEdgeName<StateId>, StateId, S, Resource>
   ) => void | Promise<void>;
 }
 
@@ -123,25 +128,29 @@ export type ExplicitEdgesOnly<EdgeName extends string> = Exclude<
 // - all resources
 
 export type GetEdgesResult<
-  S extends State<string>,
+  StateId extends string,
+  S extends State<StateId>,
   EdgeName extends string,
   Resource extends string
-> = Record<EdgeName, Edge<EdgeName, S, Resource>>;
+> = Record<EdgeName, Edge<EdgeName, StateId, S, Resource>>;
 export type GetAllEdgesResult<
-  S extends State<string>,
+  StateId extends string,
+  S extends State<StateId>,
   EdgeName extends string,
   Resource extends string
-> = GetEdgesResult<S, AllEdgeName<EdgeName, S["id"]>, Resource>;
+> = GetEdgesResult<StateId, S, AllEdgeName<EdgeName, StateId>, Resource>;
 type GetExplicitEdges<
-  S extends State<string>,
+  StateId extends string,
+  S extends State<StateId>,
   EdgeName extends string,
   Resource extends string
-> = () => GetEdgesResult<S, EdgeName, Resource>;
+> = () => GetEdgesResult<StateId, S, EdgeName, Resource>;
 type GetAllEdges<
-  S extends State<string>,
+  StateId extends string,
+  S extends State<StateId>,
   EdgeName extends string,
   Resource extends string
-> = () => GetAllEdgesResult<S, EdgeName, Resource>;
+> = () => GetAllEdgesResult<StateId, S, EdgeName, Resource>;
 
 export const makeGraphInputSchema = <
   StateIdSchema extends SoloOrUnionSchema<any>,
@@ -185,9 +194,9 @@ export interface GraphConfInput<
   Resource extends string
 > {
   states: S[];
-  edges: Edge<EdgeName, S, Resource>[];
+  edges: Edge<EdgeName, StateId, S, Resource>[];
   resources: Resource[];
-  implicitEdgeAction?: ImplicitEdge<EdgeName, S, Resource>["action"];
+  implicitEdgeAction?: ImplicitEdge<EdgeName, StateId, S, Resource>["action"];
 }
 
 export const makeGraphInputSchemaFromInputLiterals = <
@@ -210,9 +219,9 @@ export interface Graph<
   EdgeName extends ExplicitEdgesOnly<string>,
   Resource extends string
 > {
-  getExplicitEdges: GetExplicitEdges<S, EdgeName, Resource>;
-  getImplicitEdges: () => ImplicitEdge<EdgeName, S, Resource>[];
-  getAllEdges: GetAllEdges<S, EdgeName, Resource>;
+  getExplicitEdges: GetExplicitEdges<StateId, S, EdgeName, Resource>;
+  getImplicitEdges: () => ImplicitEdge<EdgeName, StateId, S, Resource>[];
+  getAllEdges: GetAllEdges<StateId, S, EdgeName, Resource>;
   getStates: () => S[];
   getNavigableStates: () => S[];
   getResources: () => Resource[];
@@ -220,10 +229,10 @@ export interface Graph<
 // TODO ensure generics are always string literals
 // TODO these init functions are ideally zod transforms
 export const initGraph: <
-  StateId extends string,
+  const StateId extends string,
   S extends State<StateId>,
-  EdgeName extends string,
-  Resource extends string
+  const EdgeName extends string,
+  const Resource extends string
 >(
   conf: GraphConfInput<StateId, S, EdgeName, Resource>
 ) => Graph<StateId, S, EdgeName, Resource> = (conf) => {
@@ -251,7 +260,7 @@ export const initGraph: <
     _.compact(
       _.map(getStates(), (otherState) => {
         if (navState.id === otherState.id) return null;
-        const implicitEdge: ImplicitEdge<EdgeName, S, Resource> = {
+        const implicitEdge: ImplicitEdge<EdgeName, StateId, S, Resource> = {
           from: otherState.id,
           to: navState.id,
           name: `implicit-${otherState.id}-to-${navState.id}` as const,
@@ -264,8 +273,14 @@ export const initGraph: <
 
   const getImplicitEdges = () => _.cloneDeep(implicitEdges);
 
-  const getExplicitEdges: GetExplicitEdges<S, EdgeName, Resource> = () => {
+  const getExplicitEdges: GetExplicitEdges<
+    StateId,
+    S,
+    EdgeName,
+    Resource
+  > = () => {
     const toReturn = _.keyBy(_.cloneDeep(edges), "name") as GetEdgesResult<
+      StateId,
       S,
       EdgeName,
       Resource
@@ -273,11 +288,11 @@ export const initGraph: <
     return toReturn;
   };
 
-  const getAllEdges: GetAllEdges<S, EdgeName, Resource> = () => {
+  const getAllEdges: GetAllEdges<StateId, S, EdgeName, Resource> = () => {
     const toReturn = _.keyBy(
       [..._.cloneDeep(edges), ...getImplicitEdges()],
       "name"
-    ) as ReturnType<GetAllEdges<S, EdgeName, Resource>>; // TODO typing
+    ) as ReturnType<GetAllEdges<StateId, S, EdgeName, Resource>>; // TODO typing
     return toReturn;
   };
 
@@ -293,17 +308,7 @@ export const initGraph: <
 
 export type ValueOf<T> = T[keyof T];
 
-export const zodStringGeneric = <T extends string>() =>
-  z.custom<T>((data) => typeof data === "string");
-
-export const makePackSchema = <Resource extends string>() =>
-  z.record(zodStringGeneric<Resource>(), z.number());
-
-export type Pack<Resource extends string> = z.infer<
-  ReturnType<typeof makePackSchema<Resource>>
->;
-
-export type CompletePack<Resource extends string> = Record<Resource, number>;
+export type Pack<Resource extends string> = Record<Resource, number>;
 
 export const preparePack = <
   StateId extends string,
@@ -312,13 +317,13 @@ export const preparePack = <
   Resource extends string
 >(
   graph: Graph<StateId, S, EdgeName, Resource>,
-  initialPack?: Partial<CompletePack<Resource>>
+  initialPack?: Partial<Pack<Resource>>
 ) => {
   const emptyPack = _.mapValues(
     _.keyBy(graph.getResources(), (r) => r),
     () => 0
-  ) as CompletePack<Resource>; // TODO typing
-  const pack: CompletePack<Resource> = {
+  ) as Pack<Resource>; // TODO typing
+  const pack: Pack<Resource> = {
     ...emptyPack,
     ..._.omitBy(initialPack, (v) => _.isNil(v)),
   };

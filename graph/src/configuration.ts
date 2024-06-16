@@ -4,7 +4,7 @@ import {
   ExplicitEdgesOnly,
   Graph,
   GraphConfInput,
-  CompletePack,
+  Pack,
   State,
   initGraph,
   makeGraphInputSchemaFromInputLiterals,
@@ -17,8 +17,8 @@ export interface InputConfigureContext<
   EdgeName extends string,
   Resource extends string
 > {
-  steps: Step<AllEdgeName<EdgeName, S["id"]>>[];
-  graph: Graph<S["id"], S, ExplicitEdgesOnly<EdgeName>, Resource>;
+  steps: Step<AllEdgeName<EdgeName, StateId>>[];
+  graph: Graph<StateId, S, ExplicitEdgesOnly<EdgeName>, Resource>;
 }
 
 export interface InputConfigureEachContext<
@@ -27,8 +27,8 @@ export interface InputConfigureEachContext<
   EdgeName extends string,
   Resource extends string
 > extends InputConfigureContext<StateId, S, EdgeName, Resource> {
-  step: Step<AllEdgeName<EdgeName, S["id"]>>;
-  pack: CompletePack<Resource>;
+  step: Step<AllEdgeName<EdgeName, StateId>>;
+  pack: Pack<Resource>;
 }
 
 export interface InputConfigure<
@@ -79,10 +79,10 @@ export const verifyIsConfig = (candidate: unknown) => {
 
 // Mainly to get intellisense in config file
 export const configure = <
-  StateId extends string,
+  const StateId extends string,
   S extends State<StateId>,
-  EdgeName extends string,
-  Resource extends string
+  const EdgeName extends string,
+  const Resource extends string
 >(
   conf: InputConfigure<StateId, S, EdgeName, Resource>
 ) => {
@@ -92,10 +92,10 @@ export const configure = <
 
 // TODO these init functions are ideally zod transforms
 export const initConfiguration = <
-  StateId extends string,
+  const StateId extends string,
   S extends State<StateId>,
-  EdgeName extends string,
-  Resource extends string
+  const EdgeName extends string,
+  const Resource extends string
 >(
   conf: InputConfigure<StateId, S, EdgeName, Resource>
 ) => {
