@@ -1,6 +1,6 @@
-import { ThemeProvider } from "@/components/themeProvider";
-import Importer from "./components/importer";
-import FileList from "./components/fileList";
+import { ThemeProvider } from "@/components/ThemeProvider";
+import Importer from "./components/Importer";
+import FileList from "./components/FileList";
 import { useState } from "react";
 import { clamp, map, slice } from "lodash";
 import {
@@ -55,9 +55,7 @@ function App() {
         </ResizablePanel>
         <ResizableHandle />
         <ResizablePanel className="p-2">
-          <div className="overflow-auto h-full">
-            {selectedFile && <ReportViewer file={selectedFile} />}
-          </div>
+          {selectedFile && <ReportViewer file={selectedFile} />}
         </ResizablePanel>
       </ResizablePanelGroup>
     </ThemeProvider>
