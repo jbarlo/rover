@@ -21,7 +21,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  BUILD_PATH: "reporter"
+  GRAPH_BUILD_PATH: "graph"
+  REPORTER_BUILD_PATH: "reporter"
 
 jobs:
   build:
@@ -53,22 +54,22 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: ${{ steps.detect-package-manager.outputs.manager }}
-          cache-dependency-path: ${{ env.BUILD_PATH }}/${{ steps.detect-package-manager.outputs.lockfile }}
       - name: Setup Pages
         id: pages
         uses: actions/configure-pages@v5
-      - name: Install dependencies
-        run: ${{ steps.detect-package-manager.outputs.manager }} ${{ steps.detect-package-manager.outputs.command }}
-        working-directory: ${{ env.BUILD_PATH }}
+      - name: Install graph dependencies
+        run: npm ci --legacy-peer-deps
+        working-directory: ${{ env.GRAPH_BUILD_PATH }}
+      - name: Install reporter dependencies
+        run: npm ci --legacy-peer-deps
+        working-directory: ${{ env.REPORTER_BUILD_PATH }}
       - name: Build
-        run: |
-          ${{ steps.detect-package-manager.outputs.runner }} run build
-        working-directory: ${{ env.BUILD_PATH }}
+        run: npm run build
+        working-directory: ${{ env.REPORTER_BUILD_PATH }}
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ${{ env.BUILD_PATH }}/dist
+          path: ${{ env.REPORTER_BUILD_PATH }}/dist
 
   deploy:
     environment:
