@@ -22,7 +22,7 @@ describe("scheduler", () => {
         name: "1-self-loop-x2",
         resourceEffects: { apples: 2 },
         condition: { resource: "apples", value: 4, operator: "gt" },
-        action: () => {
+        action: async () => {
           console.log("1-self-loop-x2");
         },
       },
@@ -31,7 +31,7 @@ describe("scheduler", () => {
         to: "1",
         name: "1-self-loop",
         resourceEffects: { apples: 1 },
-        action: () => {
+        action: async () => {
           console.log("1-self-loop");
         },
       },
@@ -40,7 +40,7 @@ describe("scheduler", () => {
         to: "2",
         name: "go-to-2",
         condition: { resource: "apples", value: 14, operator: "gt" },
-        action: () => {
+        action: async () => {
           console.log("go-to-2");
         },
       },
@@ -48,7 +48,7 @@ describe("scheduler", () => {
         from: "1",
         to: "3",
         name: "go-to-3-from-1",
-        action: () => {
+        action: async () => {
           console.log("go-to-3-from-1");
         },
       },
@@ -56,7 +56,7 @@ describe("scheduler", () => {
         from: "2",
         to: "3",
         name: "go-to-3-from-2",
-        action: () => {
+        action: async () => {
           console.log("go-to-3-from-2");
         },
       },
@@ -65,7 +65,7 @@ describe("scheduler", () => {
         to: "1",
         name: "go-to-1-from-3",
         resourceEffects: { apples: -5 },
-        action: () => {
+        action: async () => {
           console.log("go-to-1-from-3");
         },
       },
@@ -281,7 +281,7 @@ describe("scheduler", () => {
               name: "1-self-loop-x2",
               resourceEffects: { apples: 2 },
               condition: { resource: "apples", value: 4, operator: "gt" },
-              action: () => {
+              action: async () => {
                 console.log("1-self-loop-x2");
               },
             },
@@ -290,7 +290,7 @@ describe("scheduler", () => {
               to: "1",
               name: "1-self-loop",
               resourceEffects: { apples: 1 },
-              action: () => {
+              action: async () => {
                 console.log("1-self-loop");
               },
             },
@@ -299,7 +299,7 @@ describe("scheduler", () => {
               to: "2",
               name: "go-to-2",
               condition: { resource: "apples", value: 14, operator: "gt" },
-              action: () => {
+              action: async () => {
                 console.log("go-to-2");
               },
             },
@@ -307,7 +307,7 @@ describe("scheduler", () => {
               from: "2",
               to: "3",
               name: "go-to-3-from-2",
-              action: () => {
+              action: async () => {
                 console.log("go-to-3-from-2");
               },
             },
@@ -316,7 +316,7 @@ describe("scheduler", () => {
               to: "1",
               name: "go-to-1-from-3",
               resourceEffects: { apples: -15 },
-              action: () => {
+              action: async () => {
                 console.log("go-to-1-from-3");
               },
             },
@@ -360,7 +360,7 @@ describe("scheduler", () => {
             from: "1",
             to: "2",
             name: "1-to-2",
-            action: () => {
+            action: async () => {
               console.log("1-to-2");
             },
           },
@@ -368,7 +368,7 @@ describe("scheduler", () => {
             from: "2",
             to: "3",
             name: "2-to-3",
-            action: () => {
+            action: async () => {
               console.log("2-to-3");
             },
           },
@@ -377,7 +377,7 @@ describe("scheduler", () => {
             to: "2",
             name: "3-to-2",
             resourceEffects: { apples: 1 },
-            action: () => {
+            action: async () => {
               console.log("3-to-2");
             },
           },
@@ -386,7 +386,7 @@ describe("scheduler", () => {
             to: "4",
             name: "3-to-4",
             condition: { resource: "apples", value: 1, operator: "gt" },
-            action: () => {
+            action: async () => {
               console.log("3-to-4");
             },
           },
@@ -395,7 +395,7 @@ describe("scheduler", () => {
             to: "4",
             name: "4-to-4",
             resourceEffects: { apples: -1 },
-            action: () => {
+            action: async () => {
               console.log("4-to-4");
             },
           },

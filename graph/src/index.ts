@@ -14,4 +14,5 @@ async function main() {
   await runner(config);
 }
 
+// FIXME move this to npm bin
 main();
