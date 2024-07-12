@@ -1,11 +1,12 @@
 {
   "name": "snapflow",
-  "version": "0.1.0",
+  "version": "0.0.11",
   "type": "module",
   "sideEffects": false,
   "tsup": {
     "entry": [
-      "src/**/*.ts"
+      "src/**/*.ts",
+      "!**/*.test.ts"
     ],
     "splitting": false,
     "sourcemap": false,
