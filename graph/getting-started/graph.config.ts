@@ -1,5 +1,5 @@
 // TODO nonrelative import
-import { configure } from "../src/configuration.js";
+import { configure } from "../src";
 
 export default configure({
   beforeEach: async () => {},
@@ -13,7 +13,7 @@ export default configure({
         from: "a",
         to: "b",
         name: "a->b",
-        action: async () => {},
+        action: async (): Promise<void> => {},
       },
       {
         from: "b",

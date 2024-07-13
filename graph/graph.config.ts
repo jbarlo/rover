@@ -1,4 +1,4 @@
-import { configure } from "./src/configuration.js";
+import { configure } from "./src";
 
 // TODO possible configs:
 //  - gte/lte
