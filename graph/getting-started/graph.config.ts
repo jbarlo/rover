@@ -1,5 +1,4 @@
-// TODO nonrelative import
-import { configure } from "../src";
+import { configure } from "snapflow";
 
 export default configure({
   beforeEach: async () => {},
