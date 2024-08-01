@@ -548,4 +548,39 @@ describe("scheduler", () => {
       );
     });
   });
+
+  describe("self-cylical graph", () => {
+    const cycleGraph = initGraph({
+      states: [{ id: "1", url: "start" }, { id: "2" }],
+      edges: [
+        {
+          from: "1",
+          to: "2",
+          name: "1->2",
+          action: async () => {},
+        },
+        {
+          from: "2",
+          to: "2",
+          name: "2->2 add 1",
+          resourceEffects: { apples: 1 },
+          action: async () => {},
+        },
+        {
+          from: "2",
+          to: "2",
+          name: "2->2 sub 1",
+          resourceEffects: { apples: -1 },
+          condition: { resource: "apples", value: 0, operator: "gt" },
+          action: async () => {},
+        },
+      ] as const,
+      resources: ["apples"] as const,
+    });
+
+    it.only("passes", () => {
+      const steps = runScheduler(cycleGraph);
+      expect(steps).toHaveLength(4);
+    });
+  });
 });

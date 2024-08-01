@@ -169,6 +169,7 @@ const conditionalPropagationBfs = <
     condition: HorizonEdgeCondition<R>
   ) => boolean
 ) => {
+  console.log("initialHorizon", JSON.stringify(initialHorizon, null, 2));
   const edges = graph.getAllEdges();
   const initialEdgeConditionMap: Partial<
     Record<keyof typeof edges, Cond<EdgeCondition<R> | boolean>>
@@ -203,6 +204,7 @@ const conditionalPropagationBfs = <
           edge: { name: prevHorizonEdgeName },
           condition: prevHorizonEdgeCondition,
         }) => {
+          console.log("prevHorizonEdgeName", prevHorizonEdgeName);
           const prevHorizonEdge = edges[prevHorizonEdgeName];
 
           // get all edges that are directional neighbours to prevHorizonEdge
@@ -211,10 +213,23 @@ const conditionalPropagationBfs = <
           // propagate the condition from prevHorizonEdge to neighbours
           return _.compact(
             _.map(neighbours, (neighbourEdge) => {
+              console.log(neighbourEdge.name);
               const initialEdgeCondition =
                 _.cloneDeep(initialEdgeConditionMap[neighbourEdge.name]) ??
                 true;
+              console.log("initialEdgeCondition:", initialEdgeCondition);
 
+              console.log(
+                "unpropagatedConditionPredicate input:",
+                simplifyHorizonEdgeCond(
+                  combineCond({
+                    _and: [
+                      initialEdgeCondition,
+                      prevHorizonEdgeCondition ?? true,
+                    ],
+                  })
+                )
+              );
               if (
                 !_.isNil(unpropagatedConditionPredicate) &&
                 !unpropagatedConditionPredicate(
@@ -228,6 +243,7 @@ const conditionalPropagationBfs = <
                   )
                 )
               ) {
+                console.log("null");
                 return null;
               }
 
@@ -237,11 +253,20 @@ const conditionalPropagationBfs = <
                 resourceEffectEvaluator
               );
 
+              console.log(
+                "propagatedCondition:",
+                JSON.stringify(propagatedCondition, null, 2)
+              );
+
               // for every neighbour,
               // if no condition exists, use only the propped condition
               //    (true && propped condition)
               // if a condition exists, preserve it and AND it with the backpropped condition
               //    (existing condition && propped condition)
+
+              // BUG: in cleanup, propagated condition is good to approximate
+              // pack state but combining with edge condition is the equivalent
+              // of validating at the wrong time
 
               const totalCondition =
                 // TODO if all propped conditions subsumed by edge's initial
@@ -252,6 +277,16 @@ const conditionalPropagationBfs = <
                   _and: [initialEdgeCondition, propagatedCondition],
                 });
 
+              console.log(
+                JSON.stringify(
+                  {
+                    edge: neighbourEdge,
+                    condition: simplifyHorizonEdgeCond(totalCondition),
+                  },
+                  null,
+                  2
+                )
+              );
               return {
                 edge: neighbourEdge,
                 condition: simplifyHorizonEdgeCond(totalCondition),
@@ -508,6 +543,10 @@ export const getConditionalPaths = <
   }
 };
 
+type NonConditionalPaths<EdgeName, PathElement> = {
+  edgeName: EdgeName;
+  path: PathElement[];
+}[];
 export const getNonConditionalPaths = <
   const StateId extends string,
   S extends State<StateId>,
@@ -519,10 +558,10 @@ export const getNonConditionalPaths = <
     edgeName: ExplicitEdgeName;
     path: AllEdgeName<ExplicitEdgeName, StateId>[];
   }[]
-): {
-  edgeName: ExplicitEdgeName;
-  path: AllEdgeName<ExplicitEdgeName, StateId>[];
-}[] => {
+): NonConditionalPaths<
+  ExplicitEdgeName,
+  AllEdgeName<ExplicitEdgeName, StateId>
+> => {
   type AllEdgeNames = AllEdgeName<ExplicitEdgeName, StateId>;
 
   const edges = graph.getAllEdges();
@@ -743,6 +782,7 @@ const getCleanupPath = <
   pack: Record<R, number>
   // false or cleanup path
 ): false | AllEdgeName<EdgeName, StateId>[] => {
+  console.log(edgeToClean);
   const edges = graph.getAllEdges();
   const allResources = graph.getResources();
 
@@ -1065,6 +1105,7 @@ export const runScheduler = <
 
   console.log("Calculating non-conditional paths");
   const nonConditionalPaths = getNonConditionalPaths(graph, conditionalPaths);
+  console.log(conditionalPaths, nonConditionalPaths);
 
   console.log("Constructing routes");
   const routes: Route<AllEdgeName<EdgeName, StateId>>[] = _.map(
@@ -1076,7 +1117,7 @@ export const runScheduler = <
         getPackFromPath(path.path, graph)
       );
       if (cleanupPath === false) {
-        throw new Error(`No cleanup path found for: ${path}`);
+        throw new Error(`No cleanup path found for: ${path.edgeName}`);
       }
       return {
         edgeName: path.edgeName,
