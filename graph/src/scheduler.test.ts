@@ -1,5 +1,5 @@
 import _ from "lodash";
-import { ResourceEffects, initGraph } from "./graph.js";
+import { Graph, ResourceEffects, State, initGraph } from "./graph.js";
 import {
   getConditionalPaths,
   getNonConditionalPaths,
@@ -8,13 +8,97 @@ import {
 } from "./scheduler.js";
 import { verifyCond } from "./stateCond.js";
 
+const preparePack = <R extends string>(graph: Graph<any, any, any, R>) => {
+  const resources = graph.getResources();
+  type Resource = (typeof resources)[number];
+  const pack: Partial<Record<Resource, number>> = {};
+  const applyResourceEffect = (
+    resourceEffect: ResourceEffects<Resource> | undefined
+  ) => {
+    _.each(resources, (resource) => {
+      const value = resourceEffect?.[resource];
+      if (_.isNil(value)) return;
+      pack[resource] = (pack[resource] ?? 0) + (value ?? 0);
+    });
+  };
+  return { pack, applyResourceEffect };
+};
+
+const runGraphTests = <
+  StateId extends string,
+  S extends State<StateId>,
+  EdgeName extends string,
+  Resource extends string
+>(
+  graph: Graph<StateId, S, EdgeName, Resource>,
+  graphName: string
+) => {
+  const prepSteps = () => {
+    const steps = runScheduler(graph);
+    console.log(steps);
+    const edges = graph.getAllEdges();
+    return steps.map((step) => {
+      const edge = edges[step.edgeName];
+      if (_.isNil(edge)) throw new Error("Edge not found");
+      return { ...step, edge };
+    });
+  };
+
+  it(`(${graphName}): should produce a contiguous path through the graph`, () => {
+    const stepsWithEdges = prepSteps();
+    const neighbourSteps = _.zip<
+      (typeof stepsWithEdges)[number],
+      (typeof stepsWithEdges)[number]
+    >(_.initial(stepsWithEdges), _.tail(stepsWithEdges));
+
+    expect(
+      _.every(neighbourSteps, ([a, b]) => a!.edge.to === b!.edge.from)
+    ).toBe(true);
+  });
+
+  it(`(${graphName}): should produce steps that respect conditional edges`, () => {
+    const stepsWithEdges = prepSteps();
+
+    const { pack, applyResourceEffect } = preparePack(graph);
+    const resources = graph.getResources();
+
+    _.each(stepsWithEdges, (step) => {
+      _.each(resources, (resource) => {
+        expect(
+          _.isNil(step.edge.condition) ||
+            verifyCond(pack[resource] ?? 0, resource, step.edge.condition)
+        ).toBe(true);
+      });
+      applyResourceEffect(step.edge.resourceEffects);
+    });
+    expect.hasAssertions();
+  });
+
+  it(`(${graphName}): should produce steps that empty the pack by the final step`, () => {
+    const stepsWithEdges = prepSteps();
+
+    const { pack, applyResourceEffect } = preparePack(graph);
+
+    console.log(stepsWithEdges);
+    _.each(stepsWithEdges, (step) => {
+      applyResourceEffect(step.edge.resourceEffects);
+    });
+    expect(_.every(pack, (value) => _.isNil(value) || value === 0)).toBe(true);
+  });
+
+  it(`(${graphName}): should produce exactly one action step for every edge`, () => {
+    const steps = runScheduler(graph);
+    const actionSteps = steps.filter((step) => step.type === "action");
+    const edges = graph.getExplicitEdges();
+    expect(actionSteps).toHaveLength(_.size(edges));
+    // all unique names
+    expect(_.uniqBy(actionSteps, "edgeName")).toHaveLength(actionSteps.length);
+  });
+};
+
 describe("scheduler", () => {
   const goodGraph = initGraph({
-    states: [
-      { id: "1", url: "start" },
-      { id: "2", url: "start" },
-      { id: "3", url: "start" },
-    ] as const,
+    states: [{ id: "1", url: "start" }, { id: "2" }, { id: "3" }] as const,
     edges: [
       {
         from: "1",
@@ -73,24 +157,8 @@ describe("scheduler", () => {
     resources: ["apples", "bananas"] as const,
   });
 
-  const resources = goodGraph.getResources();
-  type Resource = (typeof resources)[number];
-  const preparePack = () => {
-    const pack: Partial<Record<Resource, number>> = {};
-    const applyResourceEffect = (
-      resourceEffect: ResourceEffects<Resource> | undefined
-    ) => {
-      _.each(resources, (resource) => {
-        const value = resourceEffect?.[resource];
-        if (_.isNil(value)) return;
-        pack[resource] = (pack[resource] ?? 0) + value;
-      });
-    };
-    return { pack, applyResourceEffect };
-  };
-
-  describe.concurrent("runScheduler", () => {
-    describe.concurrent("getConditionalPaths", () => {
+  describe("runScheduler", () => {
+    describe("getConditionalPaths", () => {
       it("should return every conditional edge if graph is satisfiable", () => {
         const result = getConditionalPaths(goodGraph);
         if (result === false) throw new Error("Graph is not satisfiable");
@@ -152,8 +220,9 @@ describe("scheduler", () => {
 
         const edges = goodGraph.getAllEdges();
         const keyedEdges = _.keyBy(edges, "name");
+        const resources = goodGraph.getResources();
         _.each(result, (step) => {
-          const { pack, applyResourceEffect } = preparePack();
+          const { pack, applyResourceEffect } = preparePack(goodGraph);
 
           _.each(step.path, (pathStep) => {
             const edge = keyedEdges[pathStep];
@@ -236,119 +305,109 @@ describe("scheduler", () => {
         expect.hasAssertions();
       });
 
-      it("should return a path that respects the condition of the edge", () => {
-        const conditionalPaths = getConditionalPaths(goodGraph);
-        if (conditionalPaths === false)
-          throw new Error("Graph is not satisfiable");
-        const nonConditionalPaths = getNonConditionalPaths(
-          goodGraph,
-          conditionalPaths
-        );
-        const edges = goodGraph.getAllEdges();
-        const keyedEdges = _.keyBy(edges, "name");
-        _.each(nonConditionalPaths, (step) => {
-          const { pack, applyResourceEffect } = preparePack();
+      describe("should return a path that respects the condition of the edge", () => {
+        const testPathConditionValidity = <
+          StateId extends string,
+          S extends State<StateId>,
+          EdgeName extends string,
+          R extends string
+        >(
+          graph: Graph<StateId, S, EdgeName, R>
+        ) => {
+          const resources = graph.getResources();
 
-          _.each(step.path, (pathStep) => {
-            const edge = keyedEdges[pathStep];
-            if (_.isNil(edge)) throw new Error("Edge not found");
-            _.each(resources, (resource) => {
-              expect(
-                _.isNil(edge.condition) ||
-                  verifyCond(pack[resource] ?? 0, resource, edge.condition)
-              ).toBe(true);
+          const conditionalPaths = getConditionalPaths(graph);
+          if (conditionalPaths === false)
+            throw new Error("Graph is not satisfiable");
+          const nonConditionalPaths = getNonConditionalPaths(
+            graph,
+            conditionalPaths
+          );
+          const edges = graph.getAllEdges();
+          const keyedEdges = _.keyBy(edges, "name");
+          _.each(nonConditionalPaths, (step) => {
+            const { pack, applyResourceEffect } = preparePack(graph);
+            _.each(step.path, (pathStep) => {
+              const edge = keyedEdges[pathStep];
+              if (_.isNil(edge)) throw new Error("Edge not found");
+              _.each(resources, (resource) => {
+                expect(
+                  _.isNil(edge.condition) ||
+                    verifyCond(pack[resource] ?? 0, resource, edge.condition)
+                ).toBe(true);
+              });
+              applyResourceEffect(edge.resourceEffects);
             });
-            applyResourceEffect(edge.resourceEffects);
           });
-        });
-        expect.hasAssertions();
-      });
+          expect.hasAssertions();
+        };
 
-      it("should return a path that respects the condition of the edge, on a pathological case", () => {
-        // construct a graph that produces a case where the path for one
-        // conditional edge is shorter than the path for another conditional
-        // edge, but the shorter path if taken does not respect edge conditions
-        const minimalGraph = initGraph({
-          states: [
-            { id: "1" },
-            { id: "2" },
-            { id: "3", url: "start" },
-          ] as const,
-          edges: [
-            {
-              from: "1",
-              to: "1",
-              name: "1-self-loop-x2",
-              resourceEffects: { apples: 2 },
-              condition: { resource: "apples", value: 4, operator: "gt" },
-              action: async () => {
-                console.log("1-self-loop-x2");
-              },
-            },
-            {
-              from: "1",
-              to: "1",
-              name: "1-self-loop",
-              resourceEffects: { apples: 1 },
-              action: async () => {
-                console.log("1-self-loop");
-              },
-            },
-            {
-              from: "1",
-              to: "2",
-              name: "go-to-2",
-              condition: { resource: "apples", value: 14, operator: "gt" },
-              action: async () => {
-                console.log("go-to-2");
-              },
-            },
-            {
-              from: "2",
-              to: "3",
-              name: "go-to-3-from-2",
-              action: async () => {
-                console.log("go-to-3-from-2");
-              },
-            },
-            {
-              from: "3",
-              to: "1",
-              name: "go-to-1-from-3",
-              resourceEffects: { apples: -15 },
-              action: async () => {
-                console.log("go-to-1-from-3");
-              },
-            },
-          ] as const,
-          resources: ["apples" as const],
+        it("on a nice graph", () => {
+          testPathConditionValidity(goodGraph);
         });
-        const minimalResources = minimalGraph.getResources();
 
-        const conditionalPaths = getConditionalPaths(minimalGraph);
-        if (conditionalPaths === false)
-          throw new Error("Graph is not satisfiable");
-        const nonConditionalPaths = getNonConditionalPaths(
-          minimalGraph,
-          conditionalPaths
-        );
-        const edges = minimalGraph.getAllEdges();
-        const keyedEdges = _.keyBy(edges, "name");
-        _.each(nonConditionalPaths, (step) => {
-          const { pack, applyResourceEffect } = preparePack();
-          _.each(step.path, (pathStep) => {
-            const edge = keyedEdges[pathStep];
-            if (_.isNil(edge)) throw new Error("Edge not found");
-            _.each(minimalResources, (resource) => {
-              expect(
-                _.isNil(edge.condition) ||
-                  verifyCond(pack[resource] ?? 0, resource, edge.condition)
-              ).toBe(true);
-            });
-            applyResourceEffect(edge.resourceEffects);
+        it("on a pathological case", () => {
+          // construct a graph that produces a case where the path for one
+          // conditional edge is shorter than the path for another conditional
+          // edge, but the shorter path, if taken, does not respect edge
+          // conditions
+          const cheaterShortcutGraph = initGraph({
+            states: [
+              { id: "1" },
+              { id: "2" },
+              { id: "3", url: "start" },
+            ] as const,
+            edges: [
+              {
+                from: "1",
+                to: "1",
+                name: "1-self-loop-x2 (conditional)",
+                resourceEffects: { apples: 2 },
+                condition: { resource: "apples", value: 4, operator: "gt" },
+                action: async () => {
+                  console.log("1-self-loop-x2");
+                },
+              },
+              {
+                from: "1",
+                to: "1",
+                name: "1-self-loop",
+                resourceEffects: { apples: 1 },
+                action: async () => {
+                  console.log("1-self-loop");
+                },
+              },
+              {
+                from: "1",
+                to: "2",
+                name: "go-to-2 (conditional)",
+                condition: { resource: "apples", value: 14, operator: "gt" },
+                action: async () => {
+                  console.log("go-to-2");
+                },
+              },
+              {
+                from: "2",
+                to: "3",
+                name: "go-to-3-from-2",
+                action: async () => {
+                  console.log("go-to-3-from-2");
+                },
+              },
+              {
+                from: "3",
+                to: "1",
+                name: "go-to-1-from-3",
+                resourceEffects: { apples: -15 },
+                action: async () => {
+                  console.log("go-to-1-from-3");
+                },
+              },
+            ] as const,
+            resources: ["apples" as const],
           });
+          testPathConditionValidity(cheaterShortcutGraph);
         });
-        expect.hasAssertions();
       });
     });
 
@@ -485,67 +544,40 @@ describe("scheduler", () => {
       });
     });
 
-    const prepSteps = () => {
-      const steps = runScheduler(goodGraph);
-      const edges = goodGraph.getAllEdges();
-      return steps.map((step) => {
-        const edge = edges[step.edgeName];
-        if (_.isNil(edge)) throw new Error("Edge not found");
-        return { ...step, edge };
-      });
-    };
-
-    it("should produce a contiguous path through the graph", () => {
-      const stepsWithEdges = prepSteps();
-      const neighbourSteps = _.zip<
-        (typeof stepsWithEdges)[number],
-        (typeof stepsWithEdges)[number]
-      >(_.initial(stepsWithEdges), _.tail(stepsWithEdges));
-
-      expect(
-        _.every(neighbourSteps, ([a, b]) => a!.edge.to === b!.edge.from)
-      ).toBe(true);
+    describe("test goodGraph", () => {
+      runGraphTests(goodGraph, "goodGraph");
     });
 
-    it("should produce steps that respect conditional edges", () => {
-      const stepsWithEdges = prepSteps();
-
-      const { pack, applyResourceEffect } = preparePack();
-
-      _.each(stepsWithEdges, (step) => {
-        _.each(resources, (resource) => {
-          expect(
-            _.isNil(step.edge.condition) ||
-              verifyCond(pack[resource] ?? 0, resource, step.edge.condition)
-          ).toBe(true);
-        });
-        applyResourceEffect(step.edge.resourceEffects);
-      });
-      expect.hasAssertions();
+    const cycleGraph = initGraph({
+      states: [{ id: "1", url: "start" }, { id: "2" }],
+      edges: [
+        {
+          from: "1",
+          to: "2",
+          name: "1->2",
+          action: async () => {},
+        },
+        {
+          from: "2",
+          to: "2",
+          name: "2->2 add 1",
+          resourceEffects: { apples: 1 },
+          action: async () => {},
+        },
+        {
+          from: "2",
+          to: "2",
+          name: "2->2 sub 1",
+          resourceEffects: { apples: -1 },
+          condition: { resource: "apples", value: 0, operator: "gt" },
+          action: async () => {},
+        },
+      ] as const,
+      resources: ["apples"] as const,
     });
 
-    it("should produce steps that empty the pack by the final step", () => {
-      const stepsWithEdges = prepSteps();
-
-      const { pack, applyResourceEffect } = preparePack();
-
-      _.each(stepsWithEdges, (step) => {
-        applyResourceEffect(step.edge.resourceEffects);
-      });
-      expect(_.every(pack, (value) => _.isNil(value) || value === 0)).toBe(
-        true
-      );
-    });
-
-    it("should produce exactly one action step for every edge", () => {
-      const steps = runScheduler(goodGraph);
-      const actionSteps = steps.filter((step) => step.type === "action");
-      const edges = goodGraph.getExplicitEdges();
-      expect(actionSteps).toHaveLength(_.size(edges));
-      // all unique names
-      expect(_.uniqBy(actionSteps, "edgeName")).toHaveLength(
-        actionSteps.length
-      );
+    describe("test cycleGraph", () => {
+      runGraphTests(cycleGraph, "cycleGraph");
     });
   });
 });
