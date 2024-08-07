@@ -169,7 +169,195 @@ const conditionalPropagationBfs = <
     condition: HorizonEdgeCondition<R>
   ) => boolean
 ) => {
-  console.log("initialHorizon", JSON.stringify(initialHorizon, null, 2));
+  const edges = graph.getAllEdges();
+  const initialEdgeConditionMap: Partial<
+    Record<keyof typeof edges, Cond<EdgeCondition<R> | boolean>>
+  > = _.mapValues(edges, (edge) => _.cloneDeep(edge.condition));
+
+  // TODO make prettyPrint condition order deterministic
+  const serializeHorizonEdge = (
+    edge: ConditionalPropagationBfsHorizonEdge<StateId, S, EdgeName, R>
+  ): string =>
+    `${edge.edge.name}:${
+      _.isNil(edge.condition) ? undefined : prettyPrint(edge.condition)
+    }`;
+
+  // for every conditionally traversable edge, propagate condition until one of
+  // the following:
+  //   - a horizon element meets the success criteria (succeed)
+  //   - if all conditional edges are invalid (fail early)
+  //   - there are no edges left to propagate to (fail early)
+  //   - some constant number of iterations is reached (fail)
+
+  // propagation on edge A is defined as:
+  //  - if any edge B directionally neighbours edge A, edge B's condition
+  //    becomes its existing condition AND edge A's condition
+
+  return bfs<ConditionalPropagationBfsHorizonEdge<StateId, S, EdgeName, R>>(
+    iterLimit,
+    initialHorizon,
+    (prev) => {
+      const nextHorizon = _.flatMap(
+        prev,
+        ({
+          edge: { name: prevHorizonEdgeName },
+          condition: prevHorizonEdgeCondition,
+        }) => {
+          const prevHorizonEdge = edges[prevHorizonEdgeName];
+
+          // get all edges that are directional neighbours to prevHorizonEdge
+          const neighbours = getEdgeNeighbours(prevHorizonEdge);
+
+          // propagate the condition from prevHorizonEdge to neighbours
+          return _.compact(
+            _.map(neighbours, (neighbourEdge) => {
+              const initialEdgeCondition =
+                _.cloneDeep(initialEdgeConditionMap[neighbourEdge.name]) ??
+                true;
+
+              if (
+                !_.isNil(unpropagatedConditionPredicate) &&
+                !unpropagatedConditionPredicate(
+                  simplifyHorizonEdgeCond(
+                    combineCond({
+                      _and: [
+                        initialEdgeCondition,
+                        prevHorizonEdgeCondition ?? true,
+                      ],
+                    })
+                  )
+                )
+              ) {
+                return null;
+              }
+
+              const propagatedCondition = propagateCondition(
+                prevHorizonEdgeCondition ?? true,
+                neighbourEdge.resourceEffects,
+                resourceEffectEvaluator
+              );
+
+              // for every neighbour,
+              // if no condition exists, use only the propped condition
+              //    (true && propped condition)
+              // if a condition exists, preserve it and AND it with the backpropped condition
+              //    (existing condition && propped condition)
+
+              // BUG: in cleanup, propagated condition is good to approximate
+              // pack state but combining with edge condition is the equivalent
+              // of validating at the wrong time
+
+              // TODO BUGFIX propagatedConditionPredicate to make this optional.
+              // the CORRECT solution is to encode the "check, then propagate"
+              // logic so that in runs forward in forward propagation and
+              // backwards in backpropagation
+              const totalCondition =
+                // TODO if all propped conditions subsumed by edge's initial
+                // condition, consider a DP approach
+
+                // TODO implement simplification for fewer test values
+                combineCond({
+                  _and: [initialEdgeCondition, propagatedCondition],
+                });
+
+              return {
+                edge: neighbourEdge,
+                condition: simplifyHorizonEdgeCond(totalCondition),
+              };
+            })
+          );
+        }
+      );
+
+      // filter newBackPropHorizon of any invalid conditions
+      const validNextHorizon = _.uniqBy(
+        nextHorizon.filter(propagatedNextHorizonValidityPredicate),
+        // TODO does the edge name even matter? maybe yes, to calculate
+        // alternative paths
+        (h) => serializeHorizonEdge(h)
+      );
+
+      // if successPredicate passes, succeed 🤯
+      if (
+        // FIXME inefficient
+        _.some(validNextHorizon, (horizonEdge) => successPredicate(horizonEdge))
+      ) {
+        return {
+          endWithoutChecking: true,
+          // record edges that are off of starting states and have valid
+          // conditions
+          horizon: _.filter(validNextHorizon, (horizonEdge) =>
+            successPredicate(horizonEdge)
+          ),
+        };
+      }
+
+      return { horizon: validNextHorizon };
+    },
+    (newHorizon, horizons, iter) => {
+      // if iterLimit is reached, fail
+      if (iter >= iterLimit - 1) {
+        console.log("Conditional Edge Failed");
+        console.log(
+          JSON.stringify(
+            _.map(newHorizon, (h) => ({
+              ...h,
+              condition: _.isNil(h.condition)
+                ? "undefined"
+                : prettyPrint(h.condition),
+            }))
+          )
+        );
+        throw new Error("Iteration limit reached");
+      }
+
+      return true;
+    }
+  );
+};
+
+const TEMPCLEANUPconditionalPropagationBfs = <
+  StateId extends string,
+  S extends State<StateId>,
+  EdgeName extends string,
+  R extends string
+>(
+  graph: Graph<StateId, S, EdgeName, R>,
+  iterLimit: number,
+  initialHorizon: ConditionalPropagationBfsHorizonEdge<
+    StateId,
+    S,
+    EdgeName,
+    R
+  >[],
+  getEdgeNeighbours: (
+    edge: ValueOf<GetAllEdgesResult<StateId, S, EdgeName, R>>
+  ) => Pick<
+    ValueOf<GetAllEdgesResult<StateId, S, EdgeName, R>>,
+    "name" | "resourceEffects" | "to" | "from"
+  >[],
+  resourceEffectEvaluator: (packValue: number, effectValue: number) => number,
+  propagatedNextHorizonValidityPredicate: (
+    horizonElement: ConditionalPropagationBfsHorizonEdge<
+      StateId,
+      S,
+      EdgeName,
+      R
+    >
+  ) => boolean,
+  // if any horizon element passes, succeed. passing results become the final
+  // horizon
+  successPredicate: (
+    edge: ConditionalPropagationBfsHorizonEdge<StateId, S, EdgeName, R>
+  ) => boolean,
+  // TODO consider grouping with propagatedNextHorizonValidityPredicate (labeled
+  // "before" and "after"?).
+  //
+  // if defined, filters by valid conditions before they are propagated
+  unpropagatedConditionPredicate?: (
+    condition: HorizonEdgeCondition<R>
+  ) => boolean
+) => {
   const edges = graph.getAllEdges();
   const initialEdgeConditionMap: Partial<
     Record<keyof typeof edges, Cond<EdgeCondition<R> | boolean>>
@@ -213,23 +401,9 @@ const conditionalPropagationBfs = <
           // propagate the condition from prevHorizonEdge to neighbours
           return _.compact(
             _.map(neighbours, (neighbourEdge) => {
-              console.log(neighbourEdge.name);
               const initialEdgeCondition =
                 _.cloneDeep(initialEdgeConditionMap[neighbourEdge.name]) ??
                 true;
-              console.log("initialEdgeCondition:", initialEdgeCondition);
-
-              console.log(
-                "unpropagatedConditionPredicate input:",
-                simplifyHorizonEdgeCond(
-                  combineCond({
-                    _and: [
-                      initialEdgeCondition,
-                      prevHorizonEdgeCondition ?? true,
-                    ],
-                  })
-                )
-              );
               if (
                 !_.isNil(unpropagatedConditionPredicate) &&
                 !unpropagatedConditionPredicate(
@@ -243,7 +417,6 @@ const conditionalPropagationBfs = <
                   )
                 )
               ) {
-                console.log("null");
                 return null;
               }
 
@@ -251,11 +424,6 @@ const conditionalPropagationBfs = <
                 prevHorizonEdgeCondition ?? true,
                 neighbourEdge.resourceEffects,
                 resourceEffectEvaluator
-              );
-
-              console.log(
-                "propagatedCondition:",
-                JSON.stringify(propagatedCondition, null, 2)
               );
 
               // for every neighbour,
@@ -268,28 +436,9 @@ const conditionalPropagationBfs = <
               // pack state but combining with edge condition is the equivalent
               // of validating at the wrong time
 
-              const totalCondition =
-                // TODO if all propped conditions subsumed by edge's initial
-                // condition, consider a DP approach
-
-                // TODO implement simplification for fewer test values
-                combineCond({
-                  _and: [initialEdgeCondition, propagatedCondition],
-                });
-
-              console.log(
-                JSON.stringify(
-                  {
-                    edge: neighbourEdge,
-                    condition: simplifyHorizonEdgeCond(totalCondition),
-                  },
-                  null,
-                  2
-                )
-              );
               return {
                 edge: neighbourEdge,
-                condition: simplifyHorizonEdgeCond(totalCondition),
+                condition: simplifyHorizonEdgeCond(propagatedCondition),
               };
             })
           );
@@ -658,6 +807,9 @@ export const getNonConditionalPaths = <
                 ),
               };
               return false;
+              // BUG can end up preferring a nonsense path repeating over itself
+              // unecessarily
+
               // NOTE: the current implementation does not guarantee a path
               // shorter than a nonconditional route from the starting state.
               //
@@ -782,7 +934,6 @@ const getCleanupPath = <
   pack: Record<R, number>
   // false or cleanup path
 ): false | AllEdgeName<EdgeName, StateId>[] => {
-  console.log(edgeToClean);
   const edges = graph.getAllEdges();
   const allResources = graph.getResources();
 
@@ -812,7 +963,7 @@ const getCleanupPath = <
     (!_.isBoolean(condition) && edgeConditionIsSatisfiable(condition));
 
   try {
-    const allHorizons = conditionalPropagationBfs(
+    const allHorizons = TEMPCLEANUPconditionalPropagationBfs(
       graph,
       CONDITIONAL_CLEANUP_ITER_LIMIT,
       initialBackpropHorizon,
@@ -1105,7 +1256,6 @@ export const runScheduler = <
 
   console.log("Calculating non-conditional paths");
   const nonConditionalPaths = getNonConditionalPaths(graph, conditionalPaths);
-  console.log(conditionalPaths, nonConditionalPaths);
 
   console.log("Constructing routes");
   const routes: Route<AllEdgeName<EdgeName, StateId>>[] = _.map(
@@ -1130,6 +1280,7 @@ export const runScheduler = <
 
   console.log("Synthesizing total path");
   const totalPath = constructTotalPath(graph, routes);
+  console.log(totalPath);
 
   if (!pathIsValid(graph, totalPath))
     throw new Error("Constructed an invalid path");
