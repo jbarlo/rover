@@ -579,5 +579,39 @@ describe("scheduler", () => {
     describe("test cycleGraph", () => {
       runGraphTests(cycleGraph, "cycleGraph");
     });
+
+    const simpleLineGraph = initGraph({
+      states: [
+        { id: "1", url: "start" },
+        { id: "2" },
+        { id: "3" },
+        { id: "4" },
+      ],
+      edges: [
+        {
+          from: "1",
+          to: "2",
+          name: "1->2",
+          action: async () => {},
+        },
+        {
+          from: "2",
+          to: "3",
+          name: "2->3",
+          action: async () => {},
+        },
+        {
+          from: "3",
+          to: "4",
+          name: "3->4",
+          action: async () => {},
+        },
+      ] as const,
+      resources: ["apples"] as const,
+    });
+
+    describe("test simpleLineGraph", () => {
+      runGraphTests(simpleLineGraph, "simpleLineGraph");
+    });
   });
 });

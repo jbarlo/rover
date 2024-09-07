@@ -786,10 +786,10 @@ export const getNonConditionalPaths = <
             });
             // omit the recorded conditionals from this horizon to avoid
             // exploring its path
-            horizonToReturn = _.filter(horizonToReturn, (edgeName) =>
+            horizonToReturn = _.reject(horizonToReturn, (edgeName) =>
               _.some(
                 conditionalEdgeNames,
-                (condEdgeName) => edgeName !== condEdgeName
+                (condEdgeName) => edgeName === condEdgeName
               )
             );
             // NOTE: don't escape just after conditionals in case a starting
