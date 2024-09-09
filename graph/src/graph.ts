@@ -2,6 +2,7 @@ import _ from "lodash";
 import { Cond } from "./cond.js";
 import { ZodLiteral, ZodUnion, z } from "zod";
 import { Page } from "@playwright/test";
+import { prettyPrint } from "./stateCond.js";
 
 type SoloOrUnionSchema<I> =
   | ZodUnion<[ZodLiteral<I>, ZodLiteral<I>, ...ZodLiteral<I>[]]>
@@ -225,6 +226,8 @@ export interface Graph<
   getStates: () => S[];
   getNavigableStates: () => S[];
   getResources: () => Resource[];
+  /** TEMP: This is a temporary finicky implementation for quick visualization */
+  mermaid: () => string;
 }
 // TODO ensure generics are always string literals
 // TODO these init functions are ideally zod transforms
@@ -303,6 +306,23 @@ export const initGraph: <
     getStates,
     getNavigableStates,
     getResources: () => _.cloneDeep(resources),
+    mermaid: () => {
+      return `stateDiagram-v2
+${getStates()
+  .map(
+    (s) =>
+      `    state "${s.id}${_.isNil(s.url) ? "" : ` [${s.url}]`}" as "${s.id}"`
+  )
+  .join("\n")}
+${_.map(
+  getExplicitEdges(),
+  (edge) =>
+    `    "${edge.from}" --> "${edge.to}": ${edge.name}${
+      _.isNil(edge.condition) ? "" : ` [${prettyPrint(edge.condition)}]`
+    }`
+).join("\n")}
+`;
+    },
   };
 };
 
