@@ -9,7 +9,8 @@ import { Sample } from "./schemas/sampleCollector.js";
 const getSample = async (page: Page): Promise<Sample> => {
   return {
     screenshot: (await page.screenshot({ fullPage: true })).toString("base64"),
-    domString: await page.content(),
+    // TEMP [hide domstring]
+    // domString: await page.content(),
   };
 };
 

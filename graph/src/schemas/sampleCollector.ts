@@ -16,7 +16,8 @@ const stepSchema = schemaForType<Step<string>>()(
 
 const sampleSchema = z.object({
   screenshot: z.string().optional(),
-  domString: z.string().optional(),
+  // TEMP [hide domstring]
+  // domString: z.string().optional(),
 });
 
 export type Sample = z.infer<typeof sampleSchema>;
