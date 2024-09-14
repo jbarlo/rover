@@ -1,5 +1,5 @@
 {
-  "name": "snapflow",
+  "name": "snapflow-graph",
   "version": "0.0.15",
   "type": "module",
   "sideEffects": false,

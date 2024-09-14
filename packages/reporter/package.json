@@ -1,5 +1,5 @@
 {
-  "name": "reporter",
+  "name": "snapflow-reporter",
   "private": true,
   "version": "0.0.0",
   "type": "module",
