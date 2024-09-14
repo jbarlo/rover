@@ -30,7 +30,7 @@
   "scripts": {
     "start": "node --loader ts-node/esm ./src/bin/start.ts",
     "typecheck": "tsc --noEmit",
-    "build": "npm run typecheck && tsup",
+    "build": "pnpm run typecheck && tsup",
     "test": "vitest"
   },
   "engines": {

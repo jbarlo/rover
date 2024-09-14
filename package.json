@@ -1,0 +1,14 @@
+{
+  "name": "snapflow",
+  "version": "0.0.15",
+  "type": "module",
+  "sideEffects": false,
+  "scripts": {
+    "build": "pnpm --filter \"snapflow-graph\" --filter \"snapflow-reporter\" run build",
+    "build:graph": "pnpm --filter \"snapflow-graph\" run build",
+    "build:reporter": "pnpm --filter \"snapflow-reporter\" run build"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
