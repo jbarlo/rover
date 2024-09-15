@@ -24,7 +24,11 @@
       "types": "./dist/graphRunner.d.ts",
       "default": "./dist/graphRunner.js"
     },
-    "./configuration": {
+    "./sampleCollector": {
+      "types": "./dist/schemas/sampleCollector.d.ts",
+      "default": "./dist/schemas/sampleCollector.js"
+    },
+    ".": {
       "types": "./dist/configuration.d.ts",
       "default": "./dist/configuration.js"
     }

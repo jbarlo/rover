@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import runner from "@repo/graph/graphRunner";
-import { initConfiguration } from "@repo/graph/configuration";
+import { initConfiguration } from "@repo/graph";
 import _ from "lodash";
 import path from "path";
 import { bundleRequire } from "bundle-require";

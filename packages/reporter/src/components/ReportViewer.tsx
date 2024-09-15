@@ -3,7 +3,7 @@
 import { FC, Suspense, use } from "react";
 import { ErrorBoundary } from "react-error-boundary";
 import { isNil, map } from "lodash";
-import { reportSchema } from "../../../graph/src/schemas/sampleCollector";
+import { reportSchema } from "@repo/graph/sampleCollector";
 import {
   ResizableHandle,
   ResizablePanel,

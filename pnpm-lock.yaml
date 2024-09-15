@@ -124,6 +124,9 @@ importers:
       '@radix-ui/react-slot':
         specifier: ^1.0.2
         version: 1.1.0(react@19.0.0-rc-fb9a90fa48-20240614)(types-react@19.0.0-beta.2)
+      '@repo/graph':
+        specifier: workspace:*
+        version: link:../graph
       class-variance-authority:
         specifier: ^0.7.0
         version: 0.7.0
