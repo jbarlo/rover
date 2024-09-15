@@ -8,7 +8,7 @@
       let pkgs = import nixpkgs { inherit system; };
       in rec {
         devShell = pkgs.mkShell {
-          buildInputs = with pkgs; [ nodejs_20 nodejs_20.pkgs.pnpm ];
+          buildInputs = with pkgs; [ nodejs_20 nodejs_22.pkgs.pnpm ];
         };
       });
 }

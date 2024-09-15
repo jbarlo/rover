@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-import runner from "../graphRunner.js";
+import runner from "@repo/graph/graphRunner";
+import { initConfiguration } from "@repo/graph/configuration";
 import _ from "lodash";
 import path from "path";
-import { initConfiguration } from "../configuration.js";
 import { bundleRequire } from "bundle-require";
 
 async function loadTsConfig(configPath: string): Promise<unknown> {

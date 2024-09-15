@@ -1,28 +1,22 @@
 {
-  "name": "snapflow",
-  "version": "0.0.16",
+  "name": "snapflow-root",
+  "private": true,
   "type": "module",
   "sideEffects": false,
-  "files": [
-    "dist"
-  ],
-  "bin": {
-    "start": "./dist/graph/bin/start.js"
-  },
-  "exports": {
-    ".": "./dist/graph/index.js"
-  },
+  "packageManager": "pnpm@20.17.0",
   "scripts": {
-    "build": "pnpm --filter \"snapflow-graph\" --filter \"snapflow-reporter\" run build && sh build.sh",
-    "build:graph": "pnpm --filter \"snapflow-graph\" run build",
-    "build:reporter": "pnpm --filter \"snapflow-reporter\" run build",
-    "serve": "pnpm --filter \"snapflow-reporter\" run serve"
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "lint": "turbo lint",
+    "typecheck": "turbo typecheck",
+    "//format": "prettier --write \"**/*.{ts,tsx,md}\""
   },
-  "dependencies": {
-    "snapflow-graph": "workspace:*",
-    "snapflow-reporter": "workspace:*"
+  "devDependencies": {
+    "prettier": "^3.2.5",
+    "turbo": "^2.1.2",
+    "typescript": "catalog:"
   },
   "engines": {
-    "node": ">=14.0.0"
+    "node": ">=18"
   }
 }

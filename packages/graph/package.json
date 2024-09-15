@@ -1,5 +1,5 @@
 {
-  "name": "snapflow-graph",
+  "name": "@repo/graph",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -19,27 +19,36 @@
     ],
     "dts": true
   },
+  "exports": {
+    "./graphRunner": {
+      "types": "./dist/graphRunner.d.ts",
+      "default": "./dist/graphRunner.js"
+    },
+    "./configuration": {
+      "types": "./dist/configuration.d.ts",
+      "default": "./dist/configuration.js"
+    }
+  },
   "scripts": {
     "start": "node --loader ts-node/esm ./src/bin/start.ts",
     "typecheck": "tsc --noEmit",
-    "build": "pnpm run typecheck && tsup",
+    "build": "tsup",
     "test": "vitest"
   },
   "engines": {
-    "node": ">=14.0.0"
+    "node": ">=18.0.0"
   },
   "dependencies": {
     "@playwright/test": "^1.44.0",
-    "bundle-require": "^5.0.0",
-    "lodash": "^4.17.21",
+    "lodash": "catalog:",
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@types/lodash": "^4.14.202",
-    "@types/node": "^20.11.17",
+    "@types/lodash": "catalog:",
+    "@types/node": "catalog:",
     "ts-node": "^10.9.1",
     "tsup": "^8.1.0",
-    "typescript": "^5.1.6",
+    "typescript": "catalog:",
     "vitest": "^1.5.2"
   }
 }
