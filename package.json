@@ -7,7 +7,7 @@
     "dist"
   ],
   "bin": {
-    "my-start": "./dist/graph/bin/start.js"
+    "start": "./dist/graph/bin/start.js"
   },
   "exports": {
     ".": "./dist/graph/index.js"
