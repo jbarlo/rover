@@ -1,6 +1,6 @@
 {
   "name": "snapflow",
-  "version": "0.0.15",
+  "version": "0.0.16",
   "type": "module",
   "sideEffects": false,
   "files": [
@@ -17,6 +17,10 @@
     "build:graph": "pnpm --filter \"snapflow-graph\" run build",
     "build:reporter": "pnpm --filter \"snapflow-reporter\" run build",
     "serve": "pnpm --filter \"snapflow-reporter\" run serve"
+  },
+  "dependencies": {
+    "snapflow-graph": "workspace:*",
+    "snapflow-reporter": "workspace:*"
   },
   "engines": {
     "node": ">=14.0.0"
