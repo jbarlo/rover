@@ -1,6 +1,7 @@
 {
   "name": "snapflow-graph",
-  "version": "0.0.15",
+  "version": "0.0.0",
+  "private": true,
   "type": "module",
   "sideEffects": false,
   "tsup": {
@@ -18,15 +19,6 @@
     ],
     "dts": true
   },
-  "files": [
-    "dist"
-  ],
-  "bin": {
-    "start": "./dist/bin/start.js"
-  },
-  "exports": {
-    ".": "./dist/index.js"
-  },
   "scripts": {
     "start": "node --loader ts-node/esm ./src/bin/start.ts",
     "typecheck": "tsc --noEmit",
@@ -37,12 +29,12 @@
     "node": ">=14.0.0"
   },
   "dependencies": {
+    "@playwright/test": "^1.44.0",
     "bundle-require": "^5.0.0",
     "lodash": "^4.17.21",
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@playwright/test": "^1.44.0",
     "@types/lodash": "^4.14.202",
     "@types/node": "^20.11.17",
     "ts-node": "^10.9.1",
