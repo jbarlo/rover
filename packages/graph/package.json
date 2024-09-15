@@ -51,7 +51,7 @@
     "@types/lodash": "catalog:",
     "@types/node": "catalog:",
     "ts-node": "^10.9.1",
-    "tsup": "^8.1.0",
+    "tsup": "catalog:",
     "typescript": "catalog:",
     "vitest": "^1.5.2"
   }

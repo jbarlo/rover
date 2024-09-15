@@ -6,4 +6,5 @@ catalog:
   typescript: ^5.4.5
   lodash: ^4.17.21
   "@types/lodash": ^4.14.202
+  tsup: ^8.1.0
   "@types/node": ^20.12.12

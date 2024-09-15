@@ -22,7 +22,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build": "pnpm run typecheck && tsup"
+    "build": "tsup"
   },
   "dependencies": {
     "@repo/graph": "workspace:*",
@@ -33,7 +33,7 @@
   "devDependencies": {
     "@types/node": "catalog:",
     "@types/lodash": "catalog:",
-    "tsup": "^8.1.0",
+    "tsup": "catalog:",
     "typescript": "catalog:"
   },
   "engines": {
