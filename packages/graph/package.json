@@ -24,6 +24,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@repo/tsconfig": "workspace:*",
     "@types/lodash": "catalog:",
     "@types/node": "catalog:",
     "ts-node": "^10.9.1",

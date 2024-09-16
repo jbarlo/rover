@@ -24,6 +24,7 @@
     "lodash": "catalog:"
   },
   "devDependencies": {
+    "@repo/tsconfig": "workspace:*",
     "@repo/graph": "workspace:*",
     "@repo/reporter": "workspace:*",
     "@types/lodash": "catalog:",

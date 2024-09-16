@@ -31,6 +31,7 @@
     "@types/react-dom": "npm:types-react-dom@beta"
   },
   "devDependencies": {
+    "@repo/tsconfig": "workspace:*",
     "@types/lodash": "catalog:",
     "@types/react": "npm:types-react@beta",
     "@types/react-dom": "npm:types-react-dom@beta",
