@@ -8,3 +8,4 @@ catalog:
   "@types/lodash": ^4.14.202
   tsup: ^8.1.0
   "@types/node": ^20.12.12
+  "@playwright/test": ^1.44.0

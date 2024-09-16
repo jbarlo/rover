@@ -9,6 +9,7 @@
     "dev": "turbo dev",
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
+    "test": "turbo test:ci",
     "//format": "prettier --write \"**/*.{ts,tsx,md}\""
   },
   "devDependencies": {

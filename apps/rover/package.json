@@ -2,37 +2,32 @@
   "name": "snapflow",
   "version": "0.0.16",
   "type": "module",
-  "tsup": {
-    "entry": [
-      "src/**/*.ts",
-      "!**/*.test.ts"
-    ],
-    "splitting": false,
-    "sourcemap": false,
-    "bundle": false,
-    "minify": false,
-    "clean": true,
-    "format": [
-      "esm"
-    ],
-    "dts": true
-  },
+  "files": [
+    "dist"
+  ],
   "bin": {
     "start": "./dist/bin/start.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/main.d.ts",
+      "default": "./dist/main.js"
+    }
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "tsup"
   },
   "dependencies": {
-    "@repo/graph": "workspace:*",
-    "@repo/reporter": "workspace:*",
+    "@playwright/test": "catalog:",
     "bundle-require": "^5.0.0",
     "lodash": "catalog:"
   },
   "devDependencies": {
-    "@types/node": "catalog:",
+    "@repo/graph": "workspace:*",
+    "@repo/reporter": "workspace:*",
     "@types/lodash": "catalog:",
+    "@types/node": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:"
   },
